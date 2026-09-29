@@ -1,0 +1,7 @@
+json_key_file("") # Path to Google Play service account json
+package_name("com.gawali")
+
+# For iOS
+# app_identifier("com.gawali.app")
+# apple_id("apple-developer@gawali.app")
+# team_id("XXXXXXXXXX")

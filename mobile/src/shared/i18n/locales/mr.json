@@ -1,0 +1,53 @@
+{
+  "common": {
+    "app_name": "गवळी",
+    "tagline": "तुमचा गवळी, तुमच्या खिशात. एक दिवस रद्द करा, जास्तीचे दूध मागवा, नंतर पैसे द्या.",
+    "save": "जतन करा",
+    "cancel": "रद्द करा",
+    "confirm": "खात्री करा",
+    "loading": "लोड होत आहे...",
+    "delivered": "पोहोचवले",
+    "pending": "प्रलंबित",
+    "skipped": "रद्द दिवस",
+    "missed": "चुकले",
+    "vacation": "सुट्टी",
+    "due": "थकबाकी",
+    "paid": "भरले",
+    "litres": "लिटर",
+    "rupees": "₹"
+  },
+  "auth": {
+    "welcome_back": "पुन्हा स्वागत आहे",
+    "login_sub": "तुमच्या गवळी खात्यात लॉग इन करा.",
+    "email": "ईमेल",
+    "password": "पासवर्ड",
+    "login": "लॉग इन",
+    "create_account": "नवीन खाते तयार करा",
+    "demo_accounts": "१-टॅप डेमो लॉगिन",
+    "select_role": "तपासणीसाठी भूमिका निवडा"
+  },
+  "customer": {
+    "today_status": "आजच्या वितरणाची स्थिती",
+    "this_month": "या महिन्यातील आतापर्यंत",
+    "skip_day": "दिवस वगळा",
+    "add_extra": "जास्त दूध मागवा",
+    "pause_deliveries": "दूध तात्पुरते थांबवा",
+    "view_bills": "बिले पहा",
+    "calendar_title": "वितरण दिनदर्शिका",
+    "shop_title": "खरेदी आणि योजना",
+    "bills_title": "बिले आणि देयके",
+    "profile_title": "माहिती",
+    "cutoff_notice": "उद्यासाठी बदल आदल्या दिवशी रात्री १०:०० च्या आधी करणे आवश्यक आहे."
+  },
+  "dairy": {
+    "dashboard": "डेअरी डॅशबोर्ड",
+    "today_volume": "आजचे एकूण दूध",
+    "month_revenue": "या महिन्याची कमाई",
+    "total_outstanding": "एकूण थकबाकी",
+    "overdue_customers": "थकबाकीदार ग्राहक",
+    "send_whatsapp": "व्हॉट्सॲप",
+    "call": "कॉल करा",
+    "mark_delivered": "पोहोचवले",
+    "mark_paid": "पैसे जमा करा"
+  }
+}

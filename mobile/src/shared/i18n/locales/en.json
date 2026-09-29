@@ -1,0 +1,53 @@
+{
+  "common": {
+    "app_name": "Gawali",
+    "tagline": "Your milkman, in your pocket. Skip a day, add extra, pay later.",
+    "save": "Save",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "loading": "Loading...",
+    "delivered": "Delivered",
+    "pending": "Pending",
+    "skipped": "Skipped",
+    "missed": "Missed",
+    "vacation": "Vacation",
+    "due": "Due",
+    "paid": "Paid",
+    "litres": "L",
+    "rupees": "₹"
+  },
+  "auth": {
+    "welcome_back": "Welcome back",
+    "login_sub": "Log in to your Gawali account.",
+    "email": "Email",
+    "password": "Password",
+    "login": "Log in",
+    "create_account": "Create an account",
+    "demo_accounts": "1-Tap Demo Login",
+    "select_role": "Select a role to test"
+  },
+  "customer": {
+    "today_status": "Today's Delivery Status",
+    "this_month": "This month so far",
+    "skip_day": "Skip day",
+    "add_extra": "Add extra",
+    "pause_deliveries": "Pause delivery",
+    "view_bills": "View bills",
+    "calendar_title": "Delivery Calendar",
+    "shop_title": "Shop & Plan",
+    "bills_title": "Bills & Payments",
+    "profile_title": "Profile",
+    "cutoff_notice": "Changes for tomorrow must be made before 10:00 PM."
+  },
+  "dairy": {
+    "dashboard": "Vendor Dashboard",
+    "today_volume": "Today's Volume",
+    "month_revenue": "This Month Earned",
+    "total_outstanding": "Total Outstanding",
+    "overdue_customers": "Overdue Customers",
+    "send_whatsapp": "WhatsApp",
+    "call": "Call",
+    "mark_delivered": "Delivered",
+    "mark_paid": "Mark Paid"
+  }
+}

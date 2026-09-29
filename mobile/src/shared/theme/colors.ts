@@ -1,0 +1,50 @@
+export const colors = {
+  light: {
+    primary: '#0ea371', // Gawali signature emerald green
+    primaryDark: '#0a7d57',
+    primaryLight: '#34d399',
+    primaryBg: '#ecfdf5',
+    background: '#fdfbf7', // Warm milk-white surface
+    card: '#ffffff',
+    cardBorder: '#e2e8f0',
+    text: '#0f172a',
+    textPrimary: '#0f172a',
+    textSecondary: '#64748b',
+    textMuted: '#94a3b8',
+    surface: '#f8fafc',
+    border: '#e2e8f0',
+    error: '#ef4444',
+    delivered: '#10b981',
+    skipped: '#ef4444',
+    vacation: '#f59e0b',
+    pending: '#6366f1',
+    overdue: '#dc2626',
+    whatsApp: '#25d366',
+    divider: '#f1f5f9',
+  },
+  dark: {
+    primary: '#10b981',
+    primaryDark: '#0ea371',
+    primaryLight: '#6ee7b7',
+    primaryBg: '#064e3b',
+    background: '#0f172a',
+    card: '#1e293b',
+    cardBorder: '#334155',
+    text: '#f8fafc',
+    textPrimary: '#f8fafc',
+    textSecondary: '#94a3b8',
+    textMuted: '#64748b',
+    surface: '#1e293b',
+    border: '#334155',
+    error: '#f87171',
+    delivered: '#10b981',
+    skipped: '#ef4444',
+    vacation: '#f59e0b',
+    pending: '#818cf8',
+    overdue: '#f87171',
+    whatsApp: '#25d366',
+    divider: '#334155',
+  }
+};
+
+export type ThemeColors = typeof colors.light;

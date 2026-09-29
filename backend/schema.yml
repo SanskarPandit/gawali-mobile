@@ -1,0 +1,3650 @@
+openapi: 3.0.3
+info:
+  title: Gawali Milk Subscription API
+  version: 1.0.0
+  description: Enterprise API platform for milk subscriptions, daily delivery manifests,
+    vacation pauses, and postpaid billing.
+paths:
+  /api/v1/audit/admin/logs/:
+    get:
+      operationId: audit_admin_logs_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - audit
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAuditLogList'
+          description: ''
+  /api/v1/auth/change-password/:
+    post:
+      operationId: auth_change_password_create
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/login/:
+    post:
+      operationId: auth_login_create
+      description: |-
+        Takes a set of user credentials and returns an access and refresh JSON web
+        token pair to prove the authentication of those credentials.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomTokenObtainPairRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CustomTokenObtainPairRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CustomTokenObtainPairRequest'
+        required: true
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/me/:
+    get:
+      operationId: auth_me_retrieve
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+    patch:
+      operationId: auth_me_partial_update
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/otp/send/:
+    post:
+      operationId: auth_otp_send_create
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/otp/verify/:
+    post:
+      operationId: auth_otp_verify_create
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/signup/:
+    post:
+      operationId: auth_signup_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Register'
+          description: ''
+  /api/v1/auth/token/refresh/:
+    post:
+      operationId: auth_token_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/v1/billing/{id}/pdf/:
+    get:
+      operationId: billing_pdf_retrieve
+      description: Download PDF tax invoice for any bill.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - billing
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/billing/my-bills/:
+    get:
+      operationId: billing_my_bills_retrieve
+      description: Customer view of their postpaid bills (mirroring /app/bills in
+        web app).
+      tags:
+      - billing
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/billing/my-bills/{id}/:
+    get:
+      operationId: billing_my_bills_retrieve_2
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - billing
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+          description: ''
+  /api/v1/billing/vendor/generate/{customer_id}/:
+    post:
+      operationId: billing_vendor_generate_create
+      description: Vendor generates or regenerates a bill for a customer for a given
+        month.
+      parameters:
+      - in: path
+        name: customer_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - billing
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/billing/vendor/mark-paid/{id}/:
+    post:
+      operationId: billing_vendor_mark_paid_create
+      description: Vendor records a cash or offline UPI payment received directly
+        from customer.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - billing
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/complaints/customer/:
+    get:
+      operationId: complaints_customer_list
+      description: Customer can raise a support issue and check resolution status.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - complaints
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedComplaintList'
+          description: ''
+    post:
+      operationId: complaints_customer_create
+      description: Customer can raise a support issue and check resolution status.
+      tags:
+      - complaints
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComplaintRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ComplaintRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ComplaintRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Complaint'
+          description: ''
+  /api/v1/complaints/customer/{id}/:
+    get:
+      operationId: complaints_customer_retrieve
+      description: Customer can raise a support issue and check resolution status.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - complaints
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Complaint'
+          description: ''
+    put:
+      operationId: complaints_customer_update
+      description: Customer can raise a support issue and check resolution status.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - complaints
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComplaintRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ComplaintRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ComplaintRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Complaint'
+          description: ''
+    patch:
+      operationId: complaints_customer_partial_update
+      description: Customer can raise a support issue and check resolution status.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - complaints
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedComplaintRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedComplaintRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedComplaintRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Complaint'
+          description: ''
+    delete:
+      operationId: complaints_customer_destroy
+      description: Customer can raise a support issue and check resolution status.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - complaints
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/complaints/vendor/:
+    get:
+      operationId: complaints_vendor_list
+      description: Dairy vendor reviews complaints lodged by their subscribers.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - complaints
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedComplaintList'
+          description: ''
+  /api/v1/complaints/vendor/{id}/:
+    get:
+      operationId: complaints_vendor_retrieve
+      description: Dairy vendor reviews complaints lodged by their subscribers.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - complaints
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Complaint'
+          description: ''
+  /api/v1/complaints/vendor/{id}/resolve/:
+    patch:
+      operationId: complaints_vendor_resolve_partial_update
+      description: Dairy vendor resolves ticket and adds resolution notes.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - complaints
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/customers/dashboard/:
+    get:
+      operationId: customers_dashboard_retrieve
+      description: Customer dashboard view with today's status, cycle total, and next
+        delivery.
+      tags:
+      - customers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/customers/profile/:
+    get:
+      operationId: customers_profile_retrieve
+      tags:
+      - customers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerProfile'
+          description: ''
+    put:
+      operationId: customers_profile_update
+      tags:
+      - customers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerProfileRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CustomerProfileRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CustomerProfileRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerProfile'
+          description: ''
+    patch:
+      operationId: customers_profile_partial_update
+      tags:
+      - customers
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomerProfileRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomerProfileRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCustomerProfileRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerProfile'
+          description: ''
+  /api/v1/customers/setup/:
+    post:
+      operationId: customers_setup_create
+      description: 'Customer initial setup: selects dairy, product, quantity, and
+        address.'
+      tags:
+      - customers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/customers/vendor/{id}/:
+    get:
+      operationId: customers_vendor_retrieve
+      description: Detailed ledger and stats for a single customer under this dairy.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - customers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/customers/vendor/list/:
+    get:
+      operationId: customers_vendor_list_list
+      description: Vendor's view of all active customers with outstanding dues and
+        search.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - customers
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCustomerProfileList'
+          description: ''
+  /api/v1/dairies/admin/{id}/status/:
+    patch:
+      operationId: dairies_admin_status_partial_update
+      description: Admin can approve, verify, or suspend a dairy vendor.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - dairies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dairies/admin/dashboard/:
+    get:
+      operationId: dairies_admin_dashboard_retrieve
+      description: Platform owner dashboard intelligence (mirroring /admin in web
+        app).
+      tags:
+      - dairies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dairies/dashboard/:
+    get:
+      operationId: dairies_dashboard_retrieve
+      description: Enterprise dashboard metrics for Dairy/Vendor.
+      tags:
+      - dairies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dairies/profile/:
+    get:
+      operationId: dairies_profile_retrieve
+      description: Retrieve or update dairy vendor profile and cutoff settings.
+      tags:
+      - dairies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dairy'
+          description: ''
+    put:
+      operationId: dairies_profile_update
+      description: Retrieve or update dairy vendor profile and cutoff settings.
+      tags:
+      - dairies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DairyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DairyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DairyRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dairy'
+          description: ''
+    patch:
+      operationId: dairies_profile_partial_update
+      description: Retrieve or update dairy vendor profile and cutoff settings.
+      tags:
+      - dairies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDairyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDairyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDairyRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dairy'
+          description: ''
+  /api/v1/dairies/public-list/:
+    get:
+      operationId: dairies_public_list_list
+      description: Allows customers to find their local milk vendor/dairy.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - dairies
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDairyPublicList'
+          description: ''
+  /api/v1/dairies/routes/:
+    get:
+      operationId: dairies_routes_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - dairies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDeliveryRouteList'
+          description: ''
+    post:
+      operationId: dairies_routes_create
+      tags:
+      - dairies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliveryRouteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DeliveryRouteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DeliveryRouteRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryRoute'
+          description: ''
+  /api/v1/dairies/routes/{id}/:
+    get:
+      operationId: dairies_routes_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - dairies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryRoute'
+          description: ''
+    put:
+      operationId: dairies_routes_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - dairies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeliveryRouteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DeliveryRouteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DeliveryRouteRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryRoute'
+          description: ''
+    patch:
+      operationId: dairies_routes_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - dairies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDeliveryRouteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDeliveryRouteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDeliveryRouteRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryRoute'
+          description: ''
+    delete:
+      operationId: dairies_routes_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - dairies
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/deliveries/{id}/status/:
+    patch:
+      operationId: deliveries_status_partial_update
+      description: Mark a delivery as delivered, missed, or skipped with quick quantity
+        adjustment.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - deliveries
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/deliveries/boy/route/:
+    get:
+      operationId: deliveries_boy_route_retrieve
+      description: Delivery boy's daily route screen (/d) showing stops in order with
+        GPS and toggle.
+      tags:
+      - deliveries
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/deliveries/delivery-boys/:
+    get:
+      operationId: deliveries_delivery_boys_list
+      description: Vendor lists and adds delivery staff.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - deliveries
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDeliveryBoyList'
+          description: ''
+    post:
+      operationId: deliveries_delivery_boys_create
+      description: Vendor lists and adds delivery staff.
+      tags:
+      - deliveries
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDeliveryBoyRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CreateDeliveryBoyRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CreateDeliveryBoyRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateDeliveryBoy'
+          description: ''
+  /api/v1/deliveries/today/:
+    get:
+      operationId: deliveries_today_list
+      description: Dairy vendor's daily delivery manifest (route-ordered).
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - deliveries
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDailyDeliveryList'
+          description: ''
+  /api/v1/notifications/:
+    get:
+      operationId: notifications_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - notifications
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedNotificationList'
+          description: ''
+  /api/v1/notifications/{id}/read/:
+    patch:
+      operationId: notifications_read_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - notifications
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/notifications/read-all/:
+    post:
+      operationId: notifications_read_all_create
+      tags:
+      - notifications
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/payments/history/:
+    get:
+      operationId: payments_history_list
+      description: Customer payment receipts history.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - payments
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPaymentList'
+          description: ''
+  /api/v1/payments/initiate/:
+    post:
+      operationId: payments_initiate_create
+      description: Customer initiates Razorpay UPI/Card/Netbanking payment for an
+        outstanding bill.
+      tags:
+      - payments
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/payments/verify/:
+    post:
+      operationId: payments_verify_create
+      description: Verifies Razorpay HMAC signature and settles bill immediately.
+      tags:
+      - payments
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/products/dairy/{dairy_id}/:
+    get:
+      operationId: products_dairy_list
+      description: Public listing of products for a specific dairy (for onboarding
+        choice).
+      parameters:
+      - in: path
+        name: dairy_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProductList'
+          description: ''
+  /api/v1/products/shop/:
+    get:
+      operationId: products_shop_list
+      description: Returns products available to customer from their assigned dairy.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProductList'
+          description: ''
+  /api/v1/products/vendor/:
+    get:
+      operationId: products_vendor_list
+      description: Dairy owner manages their catalogue (milk types, curd, paneer,
+        ghee).
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProductList'
+          description: ''
+    post:
+      operationId: products_vendor_create
+      description: Dairy owner manages their catalogue (milk types, curd, paneer,
+        ghee).
+      tags:
+      - products
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+  /api/v1/products/vendor/{id}/:
+    get:
+      operationId: products_vendor_retrieve
+      description: Dairy owner manages their catalogue (milk types, curd, paneer,
+        ghee).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+    put:
+      operationId: products_vendor_update
+      description: Dairy owner manages their catalogue (milk types, curd, paneer,
+        ghee).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProductRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+    patch:
+      operationId: products_vendor_partial_update
+      description: Dairy owner manages their catalogue (milk types, curd, paneer,
+        ghee).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProductRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProductRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProductRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+          description: ''
+    delete:
+      operationId: products_vendor_destroy
+      description: Dairy owner manages their catalogue (milk types, curd, paneer,
+        ghee).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - products
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/reports/vendor/:
+    get:
+      operationId: reports_vendor_retrieve
+      description: Generates dairy vendor financial and volume metrics with breakdowns.
+      tags:
+      - reports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/reports/vendor/csv/:
+    get:
+      operationId: reports_vendor_csv_retrieve
+      description: Exports daily delivery report directly as CSV matching web app
+        button.
+      tags:
+      - reports
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/subscriptions/calendar/:
+    get:
+      operationId: subscriptions_calendar_retrieve
+      description: Returns the full calendar grid for a given year & month with deliveries,
+        overrides, and vacations.
+      tags:
+      - subscriptions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/subscriptions/orders/:
+    get:
+      operationId: subscriptions_orders_list
+      description: One-time extra orders (curd, paneer, extra milk bottles).
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - subscriptions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOrderList'
+          description: ''
+    post:
+      operationId: subscriptions_orders_create
+      description: One-time extra orders (curd, paneer, extra milk bottles).
+      tags:
+      - subscriptions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OrderRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OrderRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+          description: ''
+  /api/v1/subscriptions/orders/{id}/:
+    get:
+      operationId: subscriptions_orders_retrieve
+      description: One-time extra orders (curd, paneer, extra milk bottles).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - subscriptions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+          description: ''
+    put:
+      operationId: subscriptions_orders_update
+      description: One-time extra orders (curd, paneer, extra milk bottles).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - subscriptions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OrderRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OrderRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+          description: ''
+    patch:
+      operationId: subscriptions_orders_partial_update
+      description: One-time extra orders (curd, paneer, extra milk bottles).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - subscriptions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOrderRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+          description: ''
+    delete:
+      operationId: subscriptions_orders_destroy
+      description: One-time extra orders (curd, paneer, extra milk bottles).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - subscriptions
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/subscriptions/override/:
+    post:
+      operationId: subscriptions_override_create
+      description: Sets a date-specific skip, double, or custom quantity with cutoff
+        check.
+      tags:
+      - subscriptions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/subscriptions/override/{id}/:
+    delete:
+      operationId: subscriptions_override_destroy
+      description: Reverts a date override back to standard subscription quantity.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - subscriptions
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/subscriptions/plan/:
+    get:
+      operationId: subscriptions_plan_retrieve
+      description: Customer gets or updates their active daily milk plan.
+      tags:
+      - subscriptions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: subscriptions_plan_partial_update
+      description: Customer gets or updates their active daily milk plan.
+      tags:
+      - subscriptions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/subscriptions/vacations/:
+    get:
+      operationId: subscriptions_vacations_list
+      description: Customer pauses deliveries over a continuous date range.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - subscriptions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedVacationPeriodList'
+          description: ''
+    post:
+      operationId: subscriptions_vacations_create
+      description: Customer pauses deliveries over a continuous date range.
+      tags:
+      - subscriptions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VacationPeriodRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VacationPeriodRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VacationPeriodRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VacationPeriod'
+          description: ''
+  /api/v1/subscriptions/vacations/{id}/:
+    get:
+      operationId: subscriptions_vacations_retrieve
+      description: Customer pauses deliveries over a continuous date range.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - subscriptions
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VacationPeriod'
+          description: ''
+    put:
+      operationId: subscriptions_vacations_update
+      description: Customer pauses deliveries over a continuous date range.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - subscriptions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VacationPeriodRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VacationPeriodRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VacationPeriodRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VacationPeriod'
+          description: ''
+    patch:
+      operationId: subscriptions_vacations_partial_update
+      description: Customer pauses deliveries over a continuous date range.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - subscriptions
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedVacationPeriodRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedVacationPeriodRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedVacationPeriodRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VacationPeriod'
+          description: ''
+    delete:
+      operationId: subscriptions_vacations_destroy
+      description: Customer pauses deliveries over a continuous date range.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - subscriptions
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+components:
+  schemas:
+    AuditLog:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        actor:
+          type: string
+          format: uuid
+          nullable: true
+        actor_name:
+          type: string
+          readOnly: true
+        actor_email:
+          type: string
+          readOnly: true
+        action:
+          type: string
+          maxLength: 100
+        entity_name:
+          type: string
+          maxLength: 100
+        entity_id:
+          type: string
+          maxLength: 100
+        details: {}
+        ip_address:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - action
+      - actor_email
+      - actor_name
+      - created_at
+      - id
+    Bill:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        customer:
+          type: string
+          format: uuid
+        customer_name:
+          type: string
+          readOnly: true
+        dairy:
+          type: string
+          format: uuid
+        dairy_name:
+          type: string
+          readOnly: true
+        billing_month:
+          type: string
+          format: date
+          description: First date of the billing month e.g. 2026-09-01
+        month_name:
+          type: string
+          readOnly: true
+        total_quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,6}(?:\.\d{0,2})?$
+        total_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        paid_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        due_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        status:
+          $ref: '#/components/schemas/BillStatusEnum'
+        due_date:
+          type: string
+          format: date
+          nullable: true
+        paid_at:
+          type: string
+          format: date-time
+          nullable: true
+        pdf_url:
+          type: string
+          readOnly: true
+        is_paid:
+          type: string
+          readOnly: true
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillItem'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - billing_month
+      - created_at
+      - customer
+      - customer_name
+      - dairy
+      - dairy_name
+      - id
+      - is_paid
+      - items
+      - month_name
+      - pdf_url
+    BillItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        date:
+          type: string
+          format: date
+        item_name:
+          type: string
+          maxLength: 200
+        quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+        unit_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        total_amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+      required:
+      - date
+      - id
+      - item_name
+      - quantity
+      - total_amount
+      - unit_price
+    BillStatusEnum:
+      enum:
+      - generated
+      - partially_paid
+      - paid
+      - overdue
+      type: string
+      description: |-
+        * `generated` - Generated
+        * `partially_paid` - Partially Paid
+        * `paid` - Paid
+        * `overdue` - Overdue
+    BillingCycleEnum:
+      enum:
+      - monthly
+      - weekly
+      - fortnightly
+      type: string
+      description: |-
+        * `monthly` - Monthly
+        * `weekly` - Weekly
+        * `fortnightly` - Fortnightly
+    CategoryEnum:
+      enum:
+      - missed_delivery
+      - milk_quality
+      - quantity_mismatch
+      - late_delivery
+      - billing_issue
+      - other
+      type: string
+      description: |-
+        * `missed_delivery` - Missed Delivery
+        * `milk_quality` - Milk Quality / Curdled
+        * `quantity_mismatch` - Incorrect Quantity
+        * `late_delivery` - Late Delivery
+        * `billing_issue` - Billing Issue
+        * `other` - Other Issue
+    Complaint:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        customer:
+          type: string
+          format: uuid
+          readOnly: true
+        customer_name:
+          type: string
+          readOnly: true
+        customer_phone:
+          type: string
+          readOnly: true
+        dairy:
+          type: string
+          format: uuid
+          readOnly: true
+        dairy_name:
+          type: string
+          readOnly: true
+        delivery:
+          type: string
+          format: uuid
+          nullable: true
+        category:
+          $ref: '#/components/schemas/CategoryEnum'
+        category_display:
+          type: string
+          readOnly: true
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/ComplaintStatusEnum'
+        resolution_notes:
+          type: string
+        resolved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - category_display
+      - created_at
+      - customer
+      - customer_name
+      - customer_phone
+      - dairy
+      - dairy_name
+      - description
+      - id
+      - resolved_at
+    ComplaintRequest:
+      type: object
+      properties:
+        delivery:
+          type: string
+          format: uuid
+          nullable: true
+        category:
+          $ref: '#/components/schemas/CategoryEnum'
+        description:
+          type: string
+          minLength: 1
+        status:
+          $ref: '#/components/schemas/ComplaintStatusEnum'
+        resolution_notes:
+          type: string
+      required:
+      - description
+    ComplaintStatusEnum:
+      enum:
+      - open
+      - in_progress
+      - resolved
+      - closed
+      type: string
+      description: |-
+        * `open` - Open
+        * `in_progress` - In Progress
+        * `resolved` - Resolved
+        * `closed` - Closed
+    CreateDeliveryBoy:
+      type: object
+      properties:
+        full_name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+        vehicle_number:
+          type: string
+        assigned_route_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - email
+      - full_name
+      - password
+      - phone
+    CreateDeliveryBoyRequest:
+      type: object
+      properties:
+        full_name:
+          type: string
+          minLength: 1
+        phone:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+          minLength: 1
+        password:
+          type: string
+          minLength: 6
+        vehicle_number:
+          type: string
+        assigned_route_id:
+          type: string
+          format: uuid
+          nullable: true
+      required:
+      - email
+      - full_name
+      - password
+      - phone
+    CustomTokenObtainPairRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          writeOnly: true
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - email
+      - password
+    CustomerProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        user:
+          allOf:
+          - $ref: '#/components/schemas/User'
+          readOnly: true
+        full_name:
+          type: string
+          readOnly: true
+        phone:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        dairy:
+          type: string
+          format: uuid
+          nullable: true
+        dairy_name:
+          type: string
+          readOnly: true
+        delivery_route:
+          type: string
+          format: uuid
+          nullable: true
+        route_name:
+          type: string
+          readOnly: true
+        address:
+          type: string
+        flat_or_house_number:
+          type: string
+          maxLength: 100
+        landmark:
+          type: string
+          maxLength: 200
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
+          nullable: true
+        delivery_instructions:
+          type: string
+          description: e.g. Leave at door, ring bell twice
+        preferred_language:
+          $ref: '#/components/schemas/PreferredLanguageEnum'
+        dark_mode_enabled:
+          type: boolean
+        route_stop_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: Sequential stop sequence for morning delivery
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - address
+      - created_at
+      - dairy_name
+      - email
+      - full_name
+      - id
+      - phone
+      - route_name
+      - user
+    CustomerProfileRequest:
+      type: object
+      properties:
+        dairy:
+          type: string
+          format: uuid
+          nullable: true
+        delivery_route:
+          type: string
+          format: uuid
+          nullable: true
+        address:
+          type: string
+          minLength: 1
+        flat_or_house_number:
+          type: string
+          maxLength: 100
+        landmark:
+          type: string
+          maxLength: 200
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
+          nullable: true
+        delivery_instructions:
+          type: string
+          description: e.g. Leave at door, ring bell twice
+        preferred_language:
+          $ref: '#/components/schemas/PreferredLanguageEnum'
+        dark_mode_enabled:
+          type: boolean
+        route_stop_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: Sequential stop sequence for morning delivery
+        is_active:
+          type: boolean
+      required:
+      - address
+    DailyDelivery:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        delivery_date:
+          type: string
+          format: date
+          readOnly: true
+        scheduled_quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+          readOnly: true
+        delivered_quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+        status:
+          $ref: '#/components/schemas/DailyDeliveryStatusEnum'
+        delivered_at:
+          type: string
+          format: date-time
+          nullable: true
+        notes:
+          type: string
+        customer_id:
+          type: string
+          format: uuid
+          readOnly: true
+        customer_name:
+          type: string
+          readOnly: true
+        customer_phone:
+          type: string
+          readOnly: true
+        customer_address:
+          type: string
+          readOnly: true
+        flat_or_house:
+          type: string
+          readOnly: true
+        delivery_instructions:
+          type: string
+          readOnly: true
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
+          readOnly: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
+          readOnly: true
+        product_name:
+          type: string
+          readOnly: true
+        product_unit:
+          type: string
+          readOnly: true
+        stop_order:
+          type: integer
+          readOnly: true
+      required:
+      - customer_address
+      - customer_id
+      - customer_name
+      - customer_phone
+      - delivery_date
+      - delivery_instructions
+      - flat_or_house
+      - id
+      - latitude
+      - longitude
+      - product_name
+      - product_unit
+      - scheduled_quantity
+      - stop_order
+    DailyDeliveryStatusEnum:
+      enum:
+      - pending
+      - delivered
+      - skipped
+      - missed
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `delivered` - Delivered
+        * `skipped` - Skipped
+        * `missed` - Missed
+    Dairy:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        user:
+          type: string
+          format: uuid
+          readOnly: true
+        owner_name:
+          type: string
+          readOnly: true
+        owner_email:
+          type: string
+          format: email
+          readOnly: true
+        business_name:
+          type: string
+          maxLength: 255
+        phone:
+          type: string
+          maxLength: 20
+        address:
+          type: string
+        city:
+          type: string
+          maxLength: 100
+        state:
+          type: string
+          maxLength: 100
+        pincode:
+          type: string
+          maxLength: 10
+        cutoff_time:
+          type: string
+          format: time
+        billing_cycle:
+          $ref: '#/components/schemas/BillingCycleEnum'
+        is_verified:
+          type: boolean
+        is_active:
+          type: boolean
+        bank_upi_id:
+          type: string
+          description: VPA / UPI ID for direct customer payment
+          maxLength: 100
+        routes:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeliveryRoute'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - address
+      - business_name
+      - created_at
+      - id
+      - owner_email
+      - owner_name
+      - phone
+      - routes
+      - user
+    DairyPublic:
+      type: object
+      description: Public representation for customer selection during onboarding.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        business_name:
+          type: string
+          maxLength: 255
+        phone:
+          type: string
+          maxLength: 20
+        city:
+          type: string
+          maxLength: 100
+        cutoff_time:
+          type: string
+          format: time
+      required:
+      - business_name
+      - id
+      - phone
+    DairyRequest:
+      type: object
+      properties:
+        business_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        phone:
+          type: string
+          minLength: 1
+          maxLength: 20
+        address:
+          type: string
+          minLength: 1
+        city:
+          type: string
+          minLength: 1
+          maxLength: 100
+        state:
+          type: string
+          minLength: 1
+          maxLength: 100
+        pincode:
+          type: string
+          maxLength: 10
+        cutoff_time:
+          type: string
+          format: time
+        billing_cycle:
+          $ref: '#/components/schemas/BillingCycleEnum'
+        is_verified:
+          type: boolean
+        is_active:
+          type: boolean
+        bank_upi_id:
+          type: string
+          description: VPA / UPI ID for direct customer payment
+          maxLength: 100
+      required:
+      - address
+      - business_name
+      - phone
+    DeliveryBoy:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        user:
+          allOf:
+          - $ref: '#/components/schemas/User'
+          readOnly: true
+        full_name:
+          type: string
+          readOnly: true
+        phone:
+          type: string
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        dairy:
+          type: string
+          format: uuid
+          readOnly: true
+        vehicle_number:
+          type: string
+          maxLength: 50
+        assigned_route:
+          type: string
+          format: uuid
+          nullable: true
+        route_name:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - dairy
+      - email
+      - full_name
+      - id
+      - phone
+      - route_name
+      - user
+    DeliveryRoute:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        dairy:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 150
+        description:
+          type: string
+        sort_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - dairy
+      - id
+      - name
+    DeliveryRouteRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        description:
+          type: string
+        sort_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+      required:
+      - name
+    KindEnum:
+      enum:
+      - subscription
+      - one_time
+      type: string
+      description: |-
+        * `subscription` - Subscription (Daily)
+        * `one_time` - One-time Order (Extras)
+    Notification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 200
+        body:
+          type: string
+        notification_type:
+          $ref: '#/components/schemas/NotificationTypeEnum'
+        data: {}
+        is_read:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - body
+      - created_at
+      - id
+      - title
+    NotificationTypeEnum:
+      enum:
+      - cutoff_reminder
+      - delivery_done
+      - bill_generated
+      - payment_received
+      - complaint_update
+      - general
+      type: string
+      description: |-
+        * `cutoff_reminder` - Cutoff Reminder
+        * `delivery_done` - Delivery Confirmation
+        * `bill_generated` - Bill Generated
+        * `payment_received` - Payment Received
+        * `complaint_update` - Complaint Update
+        * `general` - General Announcement
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        customer:
+          type: string
+          format: uuid
+          readOnly: true
+        customer_name:
+          type: string
+          readOnly: true
+        dairy:
+          type: string
+          format: uuid
+          readOnly: true
+        product:
+          type: string
+          format: uuid
+        product_name:
+          type: string
+          readOnly: true
+        product_unit:
+          type: string
+          readOnly: true
+        quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+        unit_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+        total_price:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          readOnly: true
+        delivery_date:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/OrderStatusEnum'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - customer
+      - customer_name
+      - dairy
+      - delivery_date
+      - id
+      - product
+      - product_name
+      - product_unit
+      - total_price
+      - unit_price
+    OrderRequest:
+      type: object
+      properties:
+        product:
+          type: string
+          format: uuid
+        quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+        delivery_date:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/OrderStatusEnum'
+      required:
+      - delivery_date
+      - product
+    OrderStatusEnum:
+      enum:
+      - pending
+      - delivered
+      - cancelled
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `delivered` - Delivered
+        * `cancelled` - Cancelled
+    PaginatedAuditLogList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditLog'
+    PaginatedComplaintList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Complaint'
+    PaginatedCustomerProfileList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerProfile'
+    PaginatedDailyDeliveryList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/DailyDelivery'
+    PaginatedDairyPublicList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/DairyPublic'
+    PaginatedDeliveryBoyList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeliveryBoy'
+    PaginatedDeliveryRouteList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeliveryRoute'
+    PaginatedNotificationList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+    PaginatedOrderList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Order'
+    PaginatedPaymentList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Payment'
+    PaginatedProductList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+    PaginatedVacationPeriodList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/VacationPeriod'
+    PatchedComplaintRequest:
+      type: object
+      properties:
+        delivery:
+          type: string
+          format: uuid
+          nullable: true
+        category:
+          $ref: '#/components/schemas/CategoryEnum'
+        description:
+          type: string
+          minLength: 1
+        status:
+          $ref: '#/components/schemas/ComplaintStatusEnum'
+        resolution_notes:
+          type: string
+    PatchedCustomerProfileRequest:
+      type: object
+      properties:
+        dairy:
+          type: string
+          format: uuid
+          nullable: true
+        delivery_route:
+          type: string
+          format: uuid
+          nullable: true
+        address:
+          type: string
+          minLength: 1
+        flat_or_house_number:
+          type: string
+          maxLength: 100
+        landmark:
+          type: string
+          maxLength: 200
+        latitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
+          nullable: true
+        longitude:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,7})?$
+          nullable: true
+        delivery_instructions:
+          type: string
+          description: e.g. Leave at door, ring bell twice
+        preferred_language:
+          $ref: '#/components/schemas/PreferredLanguageEnum'
+        dark_mode_enabled:
+          type: boolean
+        route_stop_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+          description: Sequential stop sequence for morning delivery
+        is_active:
+          type: boolean
+    PatchedDairyRequest:
+      type: object
+      properties:
+        business_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        phone:
+          type: string
+          minLength: 1
+          maxLength: 20
+        address:
+          type: string
+          minLength: 1
+        city:
+          type: string
+          minLength: 1
+          maxLength: 100
+        state:
+          type: string
+          minLength: 1
+          maxLength: 100
+        pincode:
+          type: string
+          maxLength: 10
+        cutoff_time:
+          type: string
+          format: time
+        billing_cycle:
+          $ref: '#/components/schemas/BillingCycleEnum'
+        is_verified:
+          type: boolean
+        is_active:
+          type: boolean
+        bank_upi_id:
+          type: string
+          description: VPA / UPI ID for direct customer payment
+          maxLength: 100
+    PatchedDeliveryRouteRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 150
+        description:
+          type: string
+        sort_order:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 0
+          format: int64
+    PatchedOrderRequest:
+      type: object
+      properties:
+        product:
+          type: string
+          format: uuid
+        quantity:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,3}(?:\.\d{0,2})?$
+        delivery_date:
+          type: string
+          format: date
+        status:
+          $ref: '#/components/schemas/OrderStatusEnum'
+    PatchedProductRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        unit:
+          type: string
+          minLength: 1
+          description: e.g. L, 500g, pack, kg
+          maxLength: 50
+        price_per_unit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        kind:
+          $ref: '#/components/schemas/KindEnum'
+        is_available:
+          type: boolean
+        description:
+          type: string
+        image_url:
+          type: string
+          format: uri
+          nullable: true
+          maxLength: 500
+    PatchedVacationPeriodRequest:
+      type: object
+      properties:
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        reason:
+          type: string
+          maxLength: 255
+        is_active:
+          type: boolean
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        bill:
+          type: string
+          format: uuid
+        customer:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        payment_method:
+          $ref: '#/components/schemas/PaymentMethodEnum'
+        razorpay_order_id:
+          type: string
+          nullable: true
+          maxLength: 100
+        razorpay_payment_id:
+          type: string
+          nullable: true
+          maxLength: 100
+        status:
+          allOf:
+          - $ref: '#/components/schemas/PaymentStatusEnum'
+          readOnly: true
+        paid_at:
+          type: string
+          format: date-time
+          nullable: true
+        recorded_by:
+          type: string
+          maxLength: 50
+        notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount
+      - bill
+      - created_at
+      - customer
+      - id
+      - status
+    PaymentMethodEnum:
+      enum:
+      - upi
+      - card
+      - netbanking
+      - cash
+      type: string
+      description: |-
+        * `upi` - UPI
+        * `card` - Card
+        * `netbanking` - Netbanking
+        * `cash` - Cash
+    PaymentStatusEnum:
+      enum:
+      - pending
+      - success
+      - failed
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `success` - Success
+        * `failed` - Failed
+    PreferredLanguageEnum:
+      enum:
+      - en
+      - hi
+      - mr
+      type: string
+      description: |-
+        * `en` - English
+        * `hi` - Hindi
+        * `mr` - Marathi
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        dairy:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 200
+        unit:
+          type: string
+          description: e.g. L, 500g, pack, kg
+          maxLength: 50
+        price_per_unit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        kind:
+          $ref: '#/components/schemas/KindEnum'
+        is_available:
+          type: boolean
+        description:
+          type: string
+        image_url:
+          type: string
+          format: uri
+          nullable: true
+          maxLength: 500
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - dairy
+      - id
+      - name
+      - price_per_unit
+    ProductRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        unit:
+          type: string
+          minLength: 1
+          description: e.g. L, 500g, pack, kg
+          maxLength: 50
+        price_per_unit:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+        kind:
+          $ref: '#/components/schemas/KindEnum'
+        is_available:
+          type: boolean
+        description:
+          type: string
+        image_url:
+          type: string
+          format: uri
+          nullable: true
+          maxLength: 500
+      required:
+      - name
+      - price_per_unit
+    Register:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        phone:
+          type: string
+          nullable: true
+          maxLength: 20
+        full_name:
+          type: string
+          maxLength: 255
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+      required:
+      - email
+      - full_name
+      - id
+    RegisterRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 254
+        phone:
+          type: string
+          nullable: true
+          maxLength: 20
+        full_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        password:
+          type: string
+          writeOnly: true
+          minLength: 6
+      required:
+      - email
+      - full_name
+      - password
+    RoleEnum:
+      enum:
+      - admin
+      - dairy
+      - customer
+      - delivery_boy
+      type: string
+      description: |-
+        * `admin` - Platform Admin
+        * `dairy` - Dairy / Vendor
+        * `customer` - Customer
+        * `delivery_boy` - Delivery Boy
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
+    TokenRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+      required:
+      - refresh
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        phone:
+          type: string
+          nullable: true
+          maxLength: 20
+        full_name:
+          type: string
+          maxLength: 255
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          maxLength: 500
+        is_phone_verified:
+          type: boolean
+          readOnly: true
+        is_email_verified:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - email
+      - full_name
+      - id
+      - is_email_verified
+      - is_phone_verified
+    UserRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 254
+        phone:
+          type: string
+          nullable: true
+          maxLength: 20
+        full_name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        avatar_url:
+          type: string
+          format: uri
+          nullable: true
+          maxLength: 500
+      required:
+      - email
+      - full_name
+    VacationPeriod:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        customer:
+          type: string
+          format: uuid
+          readOnly: true
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        reason:
+          type: string
+          maxLength: 255
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - customer
+      - end_date
+      - id
+      - start_date
+    VacationPeriodRequest:
+      type: object
+      properties:
+        start_date:
+          type: string
+          format: date
+        end_date:
+          type: string
+          format: date
+        reason:
+          type: string
+          maxLength: 255
+        is_active:
+          type: boolean
+      required:
+      - end_date
+      - start_date
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

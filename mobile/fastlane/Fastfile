@@ -1,0 +1,40 @@
+default_platform(:android)
+
+platform :android do
+  desc "Runs all Android unit and integration tests"
+  lane :test do
+    gradle(task: "test")
+  end
+
+  desc "Build debug APK for internal team testing"
+  lane :build_debug do
+    gradle(
+      task: "assemble",
+      build_type: "Debug",
+      project_dir: "android/"
+    )
+  end
+
+  desc "Build production Release AAB bundle for Google Play Store"
+  lane :release do
+    gradle(
+      task: "bundle",
+      build_type: "Release",
+      project_dir: "android/"
+    )
+    # upload_to_play_store(track: 'internal')
+  end
+end
+
+platform :ios do
+  desc "Build IPA for TestFlight distribution"
+  lane :beta do
+    match(type: "appstore")
+    build_app(
+      workspace: "ios/Gawali.xcworkspace",
+      scheme: "Gawali",
+      export_method: "app-store"
+    )
+    # upload_to_testflight
+  end
+end
