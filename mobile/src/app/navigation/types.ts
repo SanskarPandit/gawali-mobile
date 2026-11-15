@@ -3,7 +3,6 @@ import { NavigatorScreenParams } from '@react-navigation/native';
 export type AuthStackParamList = {
   Login: undefined;
   Signup: undefined;
-  Otp: { phoneOrEmail: string };
 };
 
 export type CustomerTabParamList = {
@@ -12,6 +11,12 @@ export type CustomerTabParamList = {
   CustomerShop: undefined;
   CustomerBills: undefined;
   CustomerProfile: undefined;
+};
+
+export type CustomerStackParamList = {
+  CustomerOnboarding: undefined;
+  CustomerTabs: NavigatorScreenParams<CustomerTabParamList>;
+  CustomerSettings: undefined;
 };
 
 export type DairyTabParamList = {
@@ -24,25 +29,27 @@ export type DairyTabParamList = {
 
 export type DairyStackParamList = {
   DairyTabs: NavigatorScreenParams<DairyTabParamList>;
-  DairyCustomerDetail: { customerId: number };
+  DairyCustomerDetail: { customerId: string };
+  DairyAddCustomer: undefined;
+  DairyBusinessProfile: undefined;
+  DairyRoutes: undefined;
+  DairySettings: undefined;
 };
 
-export type DeliveryTabParamList = {
+export type DeliveryStackParamList = {
   DeliveryRoute: undefined;
-  DeliveryHistory: undefined;
-  DeliveryProfile: undefined;
+  DeliverySettings: undefined;
 };
 
-export type AdminTabParamList = {
+export type AdminStackParamList = {
   AdminDashboard: undefined;
-  AdminDairies: undefined;
   AdminSettings: undefined;
 };
 
 export type RootStackParamList = {
   Auth: NavigatorScreenParams<AuthStackParamList>;
-  CustomerApp: NavigatorScreenParams<CustomerTabParamList>;
+  CustomerApp: NavigatorScreenParams<CustomerStackParamList>;
   DairyApp: NavigatorScreenParams<DairyStackParamList>;
-  DeliveryApp: NavigatorScreenParams<DeliveryTabParamList>;
-  AdminApp: NavigatorScreenParams<AdminTabParamList>;
+  DeliveryApp: NavigatorScreenParams<DeliveryStackParamList>;
+  AdminApp: NavigatorScreenParams<AdminStackParamList>;
 };

@@ -1,0 +1,26 @@
+# Production stack on Neon: Postgres + Object Storage (no local database, no local files).
+# Neon's variables (.env.local, from `neon deploy`) are listed last so they win over backend/.env.
+#   docker compose -f docker-compose.prod.yml up -d --build
+services:
+  web:
+    build: .
+    restart: always
+    env_file:
+      - backend/.env
+      - .env.local
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.production
+    ports:
+      - "8000:8000"
+
+  scheduler:
+    build: .
+    restart: always
+    env_file:
+      - backend/.env
+      - .env.local
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.production
+    command: python manage.py run_scheduler
+    depends_on:
+      - web

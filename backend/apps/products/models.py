@@ -16,6 +16,35 @@ class Product(BaseModel):
     description = models.TextField(blank=True)
     image_url = models.URLField(max_length=500, blank=True, null=True)
 
+    class Category(models.TextChoices):
+        MILK = 'milk', 'Milk'
+        CURD = 'curd', 'Curd & Yogurt'
+        PANEER = 'paneer', 'Paneer'
+        GHEE = 'ghee', 'Ghee & Butter'
+        BAKERY = 'bakery', 'Bread & Bakery'
+        EGGS = 'eggs', 'Eggs'
+        OTHER = 'other', 'Other Essentials'
+
+    class Container(models.TextChoices):
+        GLASS_BOTTLE = 'glass_bottle', 'Glass Bottle'
+        POUCH = 'pouch', 'Pouch'
+        TUB = 'tub', 'Tub'
+        PACK = 'pack', 'Pack'
+
+    class Animal(models.TextChoices):
+        COW = 'cow', 'Cow'
+        A2_COW = 'a2_cow', 'A2 Cow'
+        BUFFALO = 'buffalo', 'Buffalo'
+        NONE = 'none', 'Not applicable'
+
+    category = models.CharField(max_length=20, choices=Category.choices, default=Category.MILK, db_index=True)
+    container = models.CharField(max_length=20, choices=Container.choices, default=Container.POUCH)
+    animal = models.CharField(max_length=20, choices=Animal.choices, default=Animal.NONE)
+    quantity_step = models.DecimalField(max_digits=4, decimal_places=2, default=1, help_text='Stepper increment, e.g. 0.5 for half-litres')
+    fat_percent = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
+    is_new = models.BooleanField(default=False)
+    is_featured = models.BooleanField(default=False)
+
     class Meta:
         verbose_name = 'Product'
         verbose_name_plural = 'Products'

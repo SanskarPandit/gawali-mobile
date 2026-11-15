@@ -51,6 +51,11 @@ class DailyDelivery(BaseModel):
         related_name='recorded_deliveries'
     )
     notes = models.TextField(blank=True)
+    # When the status was last changed on a device (offline sync resolves conflicts by this).
+    status_updated_at = models.DateTimeField(null=True, blank=True)
+    batch = models.ForeignKey('quality.MilkBatch', on_delete=models.SET_NULL, null=True, blank=True, related_name='deliveries')
+    proof_photo = models.FileField(upload_to='deliveries/proof/%Y/%m/', null=True, blank=True)
+    is_settled = models.BooleanField(default=False, help_text='Charged to wallet / autopay')
 
     class Meta:
         verbose_name = 'Daily Delivery'

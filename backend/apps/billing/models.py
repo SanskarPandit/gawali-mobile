@@ -32,12 +32,22 @@ class Bill(BaseModel):
         return f"Bill for {self.customer.user.full_name} - {self.billing_month.strftime('%B %Y')}: ₹{self.total_amount} ({self.status})"
 
     def recalculate_due(self):
-        self.due_amount = max(0, self.total_amount - self.paid_amount)
+        """Derive due amount and status from totals and payments, and persist all of them."""
+        from decimal import Decimal
+        from django.utils import timezone
+
+        self.due_amount = max(Decimal('0'), Decimal(self.total_amount) - Decimal(self.paid_amount))
         if self.due_amount == 0 and self.total_amount > 0:
             self.status = self.Status.PAID
         elif self.paid_amount > 0:
             self.status = self.Status.PARTIALLY_PAID
-        self.save(update_fields=['due_amount', 'status'])
+        elif self.due_date and timezone.localdate() > self.due_date:
+            self.status = self.Status.OVERDUE
+        else:
+            self.status = self.Status.GENERATED
+        self.save(update_fields=[
+            'total_quantity', 'total_amount', 'paid_amount', 'paid_at', 'due_amount', 'status', 'updated_at',
+        ])
 
 class BillItem(BaseModel):
     bill = models.ForeignKey(Bill, on_delete=models.CASCADE, related_name='items')

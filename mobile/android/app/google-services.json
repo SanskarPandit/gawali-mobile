@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "333632717166",
+    "project_id": "gawali-63588",
+    "storage_bucket": "gawali-63588.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:333632717166:android:3becf332e817a10f76017f",
+        "android_client_info": {
+          "package_name": "com.gawali.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC0UDgVD5usc2acnSYSq-NmTpBQ-hvi1lo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

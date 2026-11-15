@@ -13,6 +13,7 @@ class PublicDairyListView(generics.ListAPIView):
     queryset = Dairy.objects.filter(is_active=True, is_verified=True)
     serializer_class = DairyPublicSerializer
     permission_classes = [permissions.AllowAny]
+    search_fields = ['business_name', 'city']
 
 class DairyProfileView(generics.RetrieveUpdateAPIView):
     """Retrieve or update dairy vendor profile and cutoff settings."""
@@ -98,9 +99,16 @@ class DairyDashboardView(APIView):
 class DeliveryRouteViewSet(viewsets.ModelViewSet):
     serializer_class = DeliveryRouteSerializer
     permission_classes = [IsDairyUser]
+    pagination_class = None
 
     def get_queryset(self):
         return DeliveryRoute.objects.filter(dairy=self.request.user.dairy)
 
     def perform_create(self, serializer):
         serializer.save(dairy=self.request.user.dairy)
+
+    def perform_destroy(self, instance):
+        # Unassign before removing so customers and gawalis fall back to the general list.
+        instance.customers.update(delivery_route=None)
+        instance.delivery_boys.update(assigned_route=None)
+        instance.hard_delete()

@@ -8,15 +8,22 @@ import { ThemeProvider, useTheme } from '../shared/theme/ThemeContext';
 import { RootNavigator } from './navigation/RootNavigator';
 import '../shared/i18n/i18n';
 
+import { useAppSelector } from './store';
+import i18n from '../shared/i18n/i18n';
+
 const AppContent: React.FC = () => {
-  const { isDark, colors } = useTheme();
+  const { isDark } = useTheme();
+  const currentLanguage = useAppSelector((state) => state.auth.currentLanguage);
+
+  React.useEffect(() => {
+    if (i18n.language !== currentLanguage) {
+      i18n.changeLanguage(currentLanguage);
+    }
+  }, [currentLanguage]);
 
   return (
     <>
-      <StatusBar
-        barStyle={isDark ? 'light-content' : 'dark-content'}
-        backgroundColor={colors.background}
-      />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
       <NavigationContainer>
         <RootNavigator />
       </NavigationContainer>

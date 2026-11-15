@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
+import { Minus, Plus } from 'lucide-react-native';
 import { useTheme } from '../theme/ThemeContext';
 
 interface QuantityStepperProps {
@@ -26,16 +27,17 @@ export const QuantityStepper: React.FC<QuantityStepperProps> = ({
   const { colors, isDark } = useTheme();
 
   const handleDecrement = () => {
-    const next = Math.max(min, Math.round((value - step) * 10) / 10);
+    const next = Math.max(min, Math.round((value - step) * 100) / 100);
     onChange(next);
   };
 
   const handleIncrement = () => {
-    const next = Math.min(max, Math.round((value + step) * 10) / 10);
+    const next = Math.min(max, Math.round((value + step) * 100) / 100);
     onChange(next);
   };
 
   const buttonSize = size === 'sm' ? 28 : size === 'lg' ? 44 : 36;
+  const iconSize = size === 'sm' ? 14 : size === 'lg' ? 20 : 16;
   const fontSize = size === 'sm' ? 14 : size === 'lg' ? 18 : 16;
 
   return (
@@ -63,14 +65,10 @@ export const QuantityStepper: React.FC<QuantityStepperProps> = ({
           },
         ]}
       >
-        <Text
-          style={[
-            styles.buttonText,
-            { color: value <= min ? colors.textMuted : colors.textPrimary },
-          ]}
-        >
-          −
-        </Text>
+        <Minus
+          size={iconSize}
+          color={value <= min ? colors.textMuted : colors.textPrimary}
+        />
       </TouchableOpacity>
 
       <View style={styles.valueContainer}>
@@ -80,7 +78,7 @@ export const QuantityStepper: React.FC<QuantityStepperProps> = ({
             { fontSize, color: colors.textPrimary },
           ]}
         >
-          {value.toFixed(1).replace(/\.0$/, '')}
+          {Number(value.toFixed(2))}
           {unit ? <Text style={{ fontSize: fontSize - 3, color: colors.textSecondary }}> {unit}</Text> : null}
         </Text>
       </View>
@@ -99,14 +97,10 @@ export const QuantityStepper: React.FC<QuantityStepperProps> = ({
           },
         ]}
       >
-        <Text
-          style={[
-            styles.buttonText,
-            { color: value >= max ? colors.textMuted : '#FFFFFF' },
-          ]}
-        >
-          +
-        </Text>
+        <Plus
+          size={iconSize}
+          color={value >= max ? colors.textMuted : '#FFFFFF'}
+        />
       </TouchableOpacity>
     </View>
   );

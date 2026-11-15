@@ -1,602 +1,433 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Linking,
-  Alert,
-} from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Alert, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { format, addDays } from 'date-fns';
+import { useTranslation } from 'react-i18next';
+import { addDays, format, parseISO } from 'date-fns';
+import { AlertTriangle, CheckCircle2, ChevronRight, Clock, MessageCircle, PauseCircle, Phone } from 'lucide-react-native';
 import { useTheme } from '../../shared/theme/ThemeContext';
-import { Card, Badge, Button, CalendarStrip, BottomSheetModal, QuantityStepper } from '../../shared/ui';
-import { useAppDispatch, useAppSelector } from '../../app/store';
-import { setDayOverride, resetDayOverride } from '../../app/store/subscriptionSlice';
-import { formatCurrency, formatLitres } from '../../shared/utils/formatters';
-import { isCutoffPassed } from '../../shared/utils/cutoff';
+import { Badge, Button, Card, LoadState, StaleBanner, usePullToRefresh } from '../../shared/ui';
+import { errorMessage } from '../../shared/ui/QueryStates';
+import { DemoModeBar } from '../../app/session/DemoModeBar';
+import { useGetCalendarQuery, useGetCustomerDashboardQuery, useSetDayQuantityMutation, useUpdatePlanMutation } from '../../shared/api/gawaliApi';
+import { CalendarDay, toNumber } from '../../shared/api/types';
+import { formatCurrency, formatQuantity } from '../../shared/utils/formatters';
+import { DayQuantitySheet, DayTarget } from './components/DayQuantitySheet';
+
+const STATUS_BADGE: Record<string, { key: string; fallback: string; variant: 'success' | 'warning' | 'error' | 'info' | 'neutral' | 'emerald' }> = {
+  delivered: { key: 'common.delivered', fallback: 'Delivered', variant: 'success' },
+  pending: { key: 'common.on_the_way', fallback: 'On the way', variant: 'info' },
+  skipped: { key: 'common.skipped', fallback: 'Skipped', variant: 'neutral' },
+  missed: { key: 'common.missed', fallback: 'Missed', variant: 'error' },
+  scheduled: { key: 'common.scheduled', fallback: 'Scheduled', variant: 'emerald' },
+  vacation: { key: 'common.vacation', fallback: 'Vacation', variant: 'warning' },
+  none: { key: 'common.no_delivery', fallback: 'No delivery', variant: 'neutral' },
+};
 
 export const CustomerHomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
-  const dispatch = useAppDispatch();
-  const { user } = useAppSelector((state) => state.auth);
-  const { defaultPlan, overrides, cutoffTimeStr } = useAppSelector((state) => state.subscription);
-  const { bills } = useAppSelector((state) => state.billing);
+  const { t } = useTranslation();
+  const [sheet, setSheet] = useState<DayTarget | null>(null);
 
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [modalVisible, setModalVisible] = useState(false);
-  const [modalDate, setModalDate] = useState<Date>(addDays(new Date(), 1));
-  const [modalQty, setModalQty] = useState<number>(defaultPlan.quantity);
+  const dashboard = useGetCustomerDashboardQuery();
+  const now = new Date();
+  const weekEnd = addDays(now, 7);
+  const thisMonth = useGetCalendarQuery({ year: now.getFullYear(), month: now.getMonth() + 1 });
+  const crossesMonth = weekEnd.getMonth() !== now.getMonth();
+  const nextMonth = useGetCalendarQuery(
+    { year: weekEnd.getFullYear(), month: weekEnd.getMonth() + 1 },
+    { skip: !crossesMonth }
+  );
+  const [updatePlan, { isLoading: resuming }] = useUpdatePlanMutation();
+  const [setDay, { isLoading: quickSaving }] = useSetDayQuantityMutation();
 
-  const tomorrow = addDays(new Date(), 1);
-  const tomorrowKey = format(tomorrow, 'yyyy-MM-dd');
-  const tomorrowOverride = overrides[tomorrowKey];
-  const tomorrowQty = tomorrowOverride ? tomorrowOverride.quantity : defaultPlan.quantity;
-  const tomorrowIsCutoff = isCutoffPassed(tomorrow, cutoffTimeStr);
+  const refetchAll = async () => {
+    await Promise.all([dashboard.refetch(), thisMonth.refetch(), crossesMonth ? nextMonth.refetch() : null]);
+  };
+  const refreshControl = usePullToRefresh(refetchAll);
 
-  const unpaidBill = bills.find((b) => b.status === 'unpaid' || b.status === 'overdue');
+  const data = dashboard.data;
+  const plan = data?.subscription;
+  const unit = plan?.unit ?? 'L';
+  const defaultQty = toNumber(plan?.default_quantity);
 
-  const openOverrideModalForDate = (date: Date) => {
-    const key = format(date, 'yyyy-MM-dd');
-    const existing = overrides[key];
-    setModalDate(date);
-    setModalQty(existing ? existing.quantity : defaultPlan.quantity);
-    setModalVisible(true);
+  const upcoming: CalendarDay[] = useMemo(() => {
+    const days = [...(thisMonth.data?.days ?? []), ...(crossesMonth ? nextMonth.data?.days ?? [] : [])];
+    const todayKey = format(now, 'yyyy-MM-dd');
+    return days.filter((d) => d.date >= todayKey).slice(0, 7);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [thisMonth.data, nextMonth.data, crossesMonth]);
+
+  const nextChangeable = upcoming.find((d) => d.date === data?.earliest_changeable_date);
+
+  const openDay = (day: CalendarDay) => {
+    if (!day.can_modify) {
+      Alert.alert(
+        t('customer_home.locked_title', 'This day is locked'),
+        day.is_vacation
+          ? t('customer_home.locked_vacation', 'You are on vacation this day. Change it from the Calendar tab.')
+          : t('customer_home.locked_cutoff', 'Changes close at {{time}} the night before.', {
+              time: (data?.dairy?.cutoff_time ?? '22:00').slice(0, 5),
+            })
+      );
+      return;
+    }
+    setSheet({ date: day.date, quantity: toNumber(day.scheduled_quantity), overrideId: day.override_id });
   };
 
-  const handleSaveModalOverride = () => {
-    const dateStr = format(modalDate, 'yyyy-MM-dd');
-    dispatch(
-      setDayOverride({
-        date: dateStr,
-        quantity: modalQty,
-      })
+  const toggleSkip = async (day: CalendarDay) => {
+    const skipping = toNumber(day.scheduled_quantity) > 0;
+    try {
+      await setDay({ date: day.date, quantity: (skipping ? 0 : defaultQty).toFixed(2) }).unwrap();
+    } catch (e) {
+      Alert.alert(t("customer_calendar.not_saved", "Not saved"), errorMessage(e));
+    }
+  };
+
+  const resumePlan = async () => {
+    try {
+      const res = await updatePlan({ status: 'active' }).unwrap();
+      Alert.alert(t('customer_home.resumed', 'Plan resumed'), res.message);
+    } catch (e) {
+      Alert.alert(t('customer_calendar.not_saved', 'Not saved'), errorMessage(e));
+    }
+  };
+
+  const dairyPhone = data?.dairy?.phone ?? '';
+  const whatsapp = () =>
+    Linking.openURL(`https://wa.me/${dairyPhone.replace(/\D/g, '')}`).catch(() =>
+      Alert.alert(t('common.cannot_open', 'Could not open WhatsApp'))
     );
-    setModalVisible(false);
-  };
 
-  const handleQuickSkipTomorrow = () => {
-    dispatch(
-      setDayOverride({
-        date: tomorrowKey,
-        quantity: 0.0,
-        note: 'Customer skipped via 1-tap',
-      })
-    );
-  };
-
-  const handleQuickAdd1LTomorrow = () => {
-    dispatch(
-      setDayOverride({
-        date: tomorrowKey,
-        quantity: tomorrowQty + 1.0,
-      })
-    );
-  };
-
-  const handleResetTomorrow = () => {
-    dispatch(resetDayOverride(tomorrowKey));
-  };
-
-  const handleContactWhatsApp = () => {
-    Linking.openURL('https://wa.me/919876543211?text=Hi%20Badhale%20Dairy,%20I%20have%20a%20question%20regarding%20my%20milk%20delivery.');
-  };
-
-  const handleCallDairy = () => {
-    Linking.openURL('tel:+919876543211');
-  };
+  const todayStatus = data?.today_delivery?.status ?? (plan ? 'none' : 'none');
+  const todayBadge = STATUS_BADGE[todayStatus] ?? STATUS_BADGE.none;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Top App Header */}
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: Math.max(insets.top + 8, 16),
-            backgroundColor: colors.background,
-            borderBottomColor: colors.border,
-          },
-        ]}
-      >
-        <View>
-          <Text style={[styles.greeting, { color: colors.textSecondary }]}>
-            Good morning,
-          </Text>
-          <Text style={[styles.userName, { color: colors.textPrimary }]}>
-            {user?.fullName || 'Rahul Patil'} 👋
-          </Text>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top + 8, 16), borderBottomColor: colors.border }]}>
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.greeting, { color: colors.textSecondary }]}>{t('customer_home.hello', 'Namaste,')}</Text>
+            <Text style={[styles.userName, { color: colors.textPrimary }]} numberOfLines={1}>
+              {data?.customer_name ?? ''}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('CustomerProfile')}
+            style={[styles.avatar, { backgroundColor: colors.primary }]}
+            accessibilityRole="button"
+            accessibilityLabel={t('nav.profile', 'Profile')}
+          >
+            <Text style={styles.avatarLetter}>{(data?.customer_name ?? '?').charAt(0)}</Text>
+          </TouchableOpacity>
         </View>
-
-        <TouchableOpacity
-          onPress={() => navigation.navigate('CustomerProfile')}
-          style={[styles.profileAvatar, { backgroundColor: colors.primary }]}
-        >
-          <Text style={styles.avatarLetter}>
-            {(user?.fullName || 'R').charAt(0)}
-          </Text>
-        </TouchableOpacity>
+        <DemoModeBar />
       </View>
 
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + 90 },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Unpaid Bill Notice Alert if any */}
-        {unpaidBill && (
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate('CustomerBills')}
-            style={[styles.billAlertBanner, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontWeight: '700', color: '#92400E', fontSize: 13 }}>
-                ⚠️ {unpaidBill.month} Bill Pending: {formatCurrency(unpaidBill.netPayable)}
-              </Text>
-              <Text style={{ fontSize: 11, color: '#B45309', marginTop: 2 }}>
-                Due on {unpaidBill.dueDate} • Tap to pay via UPI
-              </Text>
-            </View>
-            <Text style={{ fontSize: 14, fontWeight: '700', color: '#92400E' }}>Pay ›</Text>
-          </TouchableOpacity>
-        )}
+      <LoadState isLoading={dashboard.isLoading} error={dashboard.error} hasData={!!data} onRetry={dashboard.refetch}>
+        <ScrollView
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]}
+          refreshControl={refreshControl}
+          showsVerticalScrollIndicator={false}
+        >
+          <StaleBanner error={dashboard.error} />
 
-        {/* Today's Delivery Hero Card */}
-        <Card style={styles.heroCard}>
-          <View style={styles.cardHeaderRow}>
-            <View>
-              <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>
-                Today • {format(new Date(), 'dd MMMM yyyy')}
+          {data?.unpaid_bill && (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate('CustomerBills')}
+              style={styles.billBanner}
+              accessibilityRole="button"
+            >
+              <AlertTriangle size={20} color="#D97706" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.billTitle}>
+                  {t('customer_home.bill_due', '{{month}} bill: {{amount}} due', {
+                    month: data.unpaid_bill.month,
+                    amount: formatCurrency(data.unpaid_bill.due_amount),
+                  })}
+                </Text>
+                {data.unpaid_bill.due_date ? (
+                  <Text style={styles.billSub}>
+                    {t('customer_home.pay_by', 'Pay by {{date}}', { date: format(parseISO(data.unpaid_bill.due_date), 'd MMM') })}
+                  </Text>
+                ) : null}
+              </View>
+              <ChevronRight size={16} color="#92400E" />
+            </TouchableOpacity>
+          )}
+
+          {plan?.status === 'paused' && (
+            <Card style={styles.pausedCard} variant="outlined">
+              <PauseCircle size={20} color={colors.textSecondary} />
+              <Text style={[styles.pausedText, { color: colors.textSecondary }]}>
+                {t('customer_home.paused', 'Your deliveries are paused.')}
               </Text>
+              <Button title={t('customer_home.resume', 'Resume')} size="sm" onPress={resumePlan} loading={resuming} />
+            </Card>
+          )}
+
+          {!plan && (
+            <Card style={styles.section}>
               <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>
-                {defaultPlan.productName}
+                {t('customer_home.no_plan', 'No daily plan yet')}
               </Text>
+              <Text style={[styles.muted, { color: colors.textSecondary }]}>
+                {t('customer_home.no_plan_body', 'Ask your dairy to start your plan, or pick one from the Calendar tab.')}
+              </Text>
+            </Card>
+          )}
+
+          {/* Today */}
+          {plan && (
+            <Card style={styles.section}>
+              <View style={styles.rowBetween}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.cardSub, { color: colors.textSecondary }]}>
+                    {t('customer_home.today_delivery', "Today's delivery")} · {format(now, 'd MMM')}
+                  </Text>
+                  <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{plan.product_name}</Text>
+                </View>
+                <Badge label={t(todayBadge.key, todayBadge.fallback)} variant={todayBadge.variant} />
+              </View>
+              <View style={styles.metrics}>
+                <View style={styles.metric}>
+                  <Text style={[styles.metricLabel, { color: colors.textMuted }]}>
+                    {data?.today_delivery?.status === 'delivered' ? t('customer_home.delivered_qty', 'Delivered') : t('customer_home.scheduled_qty', 'Scheduled')}
+                  </Text>
+                  <Text style={[styles.metricValue, { color: colors.primary }]}>
+                    {formatQuantity(
+                      data?.today_delivery?.status === 'delivered'
+                        ? data.today_delivery.delivered_quantity
+                        : data?.today_delivery?.scheduled_quantity ?? 0,
+                      unit
+                    )}
+                  </Text>
+                </View>
+                <View style={[styles.metricDivider, { backgroundColor: colors.border }]} />
+                <View style={styles.metric}>
+                  <Text style={[styles.metricLabel, { color: colors.textMuted }]}>{t('customer_home.time', 'Time')}</Text>
+                  <Text style={[styles.metricValue, { color: colors.textPrimary }]}>
+                    {data?.today_delivery?.delivered_at ? format(parseISO(data.today_delivery.delivered_at), 'h:mm a') : '—'}
+                  </Text>
+                </View>
+              </View>
+              {data?.today_delivery?.status === 'delivered' && (
+                <View style={[styles.statusStrip, { backgroundColor: isDark ? colors.surface : '#F0FDF4' }]}>
+                  <CheckCircle2 size={16} color={colors.primary} />
+                  <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '600' }}>
+                    {t('customer_home.delivered_msg', 'Delivered to your door')}
+                  </Text>
+                </View>
+              )}
+            </Card>
+          )}
+
+          {/* Next changeable day */}
+          {plan?.status === 'active' && nextChangeable && (
+            <Card style={styles.section}>
+              <View style={styles.rowBetween}>
+                <View>
+                  <Text style={[styles.cardSub, { color: colors.textSecondary }]}>
+                    {format(parseISO(nextChangeable.date), 'EEEE, d MMM')}
+                  </Text>
+                  <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>
+                    {formatQuantity(nextChangeable.scheduled_quantity, unit)}
+                  </Text>
+                </View>
+                <Badge
+                  label={
+                    nextChangeable.is_vacation
+                      ? t('common.vacation', 'Vacation')
+                      : toNumber(nextChangeable.scheduled_quantity) === 0
+                        ? t('common.skipped', 'Skipped')
+                        : nextChangeable.override_id
+                          ? t('common.changed', 'Changed')
+                          : t('common.scheduled', 'Scheduled')
+                  }
+                  variant={toNumber(nextChangeable.scheduled_quantity) === 0 ? 'neutral' : nextChangeable.override_id ? 'warning' : 'emerald'}
+                />
+              </View>
+              <View style={styles.cutoffRow}>
+                <Clock size={13} color={colors.textSecondary} />
+                <Text style={[styles.muted, { color: colors.textSecondary }]}>
+                  {t('customer_home.cutoff', 'You can change this until {{time}} the night before.', {
+                    time: (data?.dairy?.cutoff_time ?? '22:00').slice(0, 5),
+                  })}
+                </Text>
+              </View>
+              {nextChangeable.can_modify && (
+                <View style={styles.actions}>
+                  <Button
+                    title={
+                      toNumber(nextChangeable.scheduled_quantity) === 0
+                        ? t('customer_home.resume_day', 'Resume')
+                        : t('customer_home.skip', 'Skip')
+                    }
+                    variant="outline"
+                    size="sm"
+                    style={{ flex: 1 }}
+                    loading={quickSaving}
+                    onPress={() => toggleSkip(nextChangeable)}
+                  />
+                  <Button
+                    title={t('customer_home.change', 'Change quantity')}
+                    size="sm"
+                    style={{ flex: 1 }}
+                    onPress={() => openDay(nextChangeable)}
+                  />
+                </View>
+              )}
+            </Card>
+          )}
+
+          {/* Week ahead */}
+          {plan && upcoming.length > 0 && (
+            <>
+              <View style={styles.rowBetween}>
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('customer_home.week', 'Next 7 days')}</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('CustomerCalendar')} style={styles.link}>
+                  <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>{t('customer_home.full_month', 'Full month')}</Text>
+                  <ChevronRight size={14} color={colors.primary} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                {upcoming.map((day) => {
+                  const qty = toNumber(day.scheduled_quantity);
+                  const changed = !!day.override_id;
+                  return (
+                    <TouchableOpacity
+                      key={day.date}
+                      onPress={() => openDay(day)}
+                      style={[
+                        styles.dayChip,
+                        {
+                          borderColor: day.is_today ? colors.primary : colors.border,
+                          backgroundColor: isDark ? colors.surface : '#FFFFFF',
+                          opacity: day.can_modify || day.is_today ? 1 : 0.7,
+                        },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${format(parseISO(day.date), 'EEEE d MMMM')}: ${formatQuantity(qty, unit)}`}
+                    >
+                      <Text style={[styles.dayName, { color: day.is_today ? colors.primary : colors.textSecondary }]}>
+                        {day.is_today ? t('common.today', 'Today') : day.weekday}
+                      </Text>
+                      <Text style={[styles.dayNum, { color: colors.textPrimary }]}>{day.day}</Text>
+                      <Text
+                        style={[
+                          styles.dayQty,
+                          { color: day.is_vacation ? '#B45309' : qty === 0 ? colors.textMuted : changed ? '#B45309' : colors.primary },
+                        ]}
+                      >
+                        {day.is_vacation ? '✈' : qty === 0 ? '—' : formatQuantity(qty, unit)}
+                      </Text>
+                      {day.extras.length > 0 && <View style={[styles.extraDot, { backgroundColor: colors.primary }]} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </>
+          )}
+
+          {/* This month */}
+          {plan && data && (
+            <View style={styles.statsRow}>
+              <Card style={styles.statCard}>
+                <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>{t('customer_home.month_spend', 'This month so far')}</Text>
+                <Text style={[styles.statValue, { color: colors.textPrimary }]}>{formatCurrency(data.this_month_so_far.estimated_amount)}</Text>
+                <Text style={[styles.statSub, { color: colors.textMuted }]}>
+                  {t('customer_home.month_days', '{{qty}} over {{days}} days', {
+                    qty: formatQuantity(data.this_month_so_far.delivered_quantity, unit),
+                    days: data.this_month_so_far.delivered_days,
+                  })}
+                </Text>
+              </Card>
+              <Card style={styles.statCard}>
+                <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>{t('customer_home.rate', 'Your rate')}</Text>
+                <Text style={[styles.statValue, { color: colors.primary }]}>
+                  {formatCurrency(plan.price_per_unit)}
+                  <Text style={{ fontSize: 13 }}> /{unit}</Text>
+                </Text>
+                <Text style={[styles.statSub, { color: colors.textMuted }]}>
+                  {formatQuantity(plan.default_quantity, unit)} {t('customer_home.per_day', 'per day')}
+                </Text>
+              </Card>
             </View>
-            <Badge label="Delivered" variant="success" />
-          </View>
+          )}
 
-          <View style={styles.deliveryDetails}>
-            <View style={styles.detailMetric}>
-              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Delivered Qty</Text>
-              <Text style={[styles.metricValue, { color: colors.primary }]}>
-                {formatLitres(defaultPlan.quantity)}
-              </Text>
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.detailMetric}>
-              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Delivered At</Text>
-              <Text style={[styles.metricValue, { color: colors.textPrimary }]}>06:15 AM</Text>
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.detailMetric}>
-              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Dairy</Text>
-              <Text style={[styles.metricValue, { color: colors.textPrimary }]}>Badhale</Text>
-            </View>
-          </View>
+          {/* Dairy */}
+          {data?.dairy && (
+            <Card style={styles.section} variant="outlined">
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>{t('customer_home.your_dairy', 'Your dairy')}</Text>
+              <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>{data.dairy.name}</Text>
+              <View style={styles.actions}>
+                <TouchableOpacity onPress={whatsapp} style={[styles.contactBtn, { borderColor: colors.border }]} accessibilityRole="button">
+                  <MessageCircle size={16} color={colors.primary} />
+                  <Text style={[styles.contactText, { color: colors.primary }]}>WhatsApp</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => Linking.openURL(`tel:${dairyPhone}`)} style={[styles.contactBtn, { borderColor: colors.border }]} accessibilityRole="button">
+                  <Phone size={16} color={colors.primary} />
+                  <Text style={[styles.contactText, { color: colors.primary }]}>{t('customer_home.call', 'Call')}</Text>
+                </TouchableOpacity>
+              </View>
+            </Card>
+          )}
+        </ScrollView>
+      </LoadState>
 
-          <View style={[styles.statusBanner, { backgroundColor: isDark ? colors.surface : '#F0FDF4' }]}>
-            <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '600' }}>
-              ✓ Dropped in milk bag at your door (Handled by Suresh)
-            </Text>
-          </View>
-        </Card>
-
-        {/* Tomorrow's Plan & Smart Fast Actions */}
-        <Card style={styles.tomorrowCard}>
-          <View style={styles.cardHeaderRow}>
-            <View>
-              <Text style={[styles.cardSubtitle, { color: colors.textSecondary }]}>
-                Tomorrow • {format(tomorrow, 'EEEE, dd MMM')}
-              </Text>
-              <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>
-                Planned: {formatLitres(tomorrowQty)}
-              </Text>
-            </View>
-            <Badge
-              label={tomorrowQty === 0 ? 'Skipped' : tomorrowOverride ? 'Modified' : 'Scheduled'}
-              variant={tomorrowQty === 0 ? 'error' : tomorrowOverride ? 'warning' : 'emerald'}
-            />
-          </View>
-
-          <View style={styles.cutoffRow}>
-            <Text style={[styles.cutoffNotice, { color: colors.textSecondary }]}>
-              ⏰ Modify until {cutoffTimeStr.slice(0, 5)} PM tonight
-            </Text>
-          </View>
-
-          {/* Quick 1-tap Action Pills */}
-          <View style={styles.quickActionPills}>
-            {tomorrowQty > 0 ? (
-              <Button
-                title="Skip Tomorrow (0L)"
-                variant="outline"
-                size="sm"
-                onPress={handleQuickSkipTomorrow}
-                style={{ flex: 1, borderColor: '#EF4444' }}
-                textStyle={{ color: '#EF4444' }}
-              />
-            ) : (
-              <Button
-                title="Resume Delivery (1.5L)"
-                variant="outline"
-                size="sm"
-                onPress={handleResetTomorrow}
-                style={{ flex: 1 }}
-              />
-            )}
-
-            <Button
-              title="+ 1L Extra"
-              variant="outline"
-              size="sm"
-              onPress={handleQuickAdd1LTomorrow}
-              style={{ flex: 1 }}
-            />
-
-            <Button
-              title="Custom Qty"
-              variant="primary"
-              size="sm"
-              onPress={() => openOverrideModalForDate(tomorrow)}
-              style={{ flex: 1 }}
-            />
-          </View>
-        </Card>
-
-        {/* 14-Day Calendar Strip */}
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-            Daily Delivery Calendar
-          </Text>
-          <TouchableOpacity onPress={() => navigation.navigate('CustomerCalendar')}>
-            <Text style={[styles.sectionLink, { color: colors.primary }]}>View Month ›</Text>
-          </TouchableOpacity>
-        </View>
-
-        <CalendarStrip
-          selectedDate={selectedDate}
-          onSelectDate={(d) => {
-            setSelectedDate(d);
-            openOverrideModalForDate(d);
-          }}
-          statusMap={overrides}
-        />
-
-        {/* Monthly Estimate & Subscription Stats */}
-        <View style={styles.statsRow}>
-          <Card style={styles.smallStatCard}>
-            <Text style={[styles.smallStatLabel, { color: colors.textSecondary }]}>Monthly Est.</Text>
-            <Text style={[styles.smallStatVal, { color: colors.textPrimary }]}>
-              {formatCurrency(defaultPlan.quantity * 30 * defaultPlan.unitPrice)}
-            </Text>
-            <Text style={{ fontSize: 11, color: colors.textMuted }}>30 days @ ₹{defaultPlan.unitPrice}/L</Text>
-          </Card>
-
-          <Card style={styles.smallStatCard}>
-            <Text style={[styles.smallStatLabel, { color: colors.textSecondary }]}>Rate Locked</Text>
-            <Text style={[styles.smallStatVal, { color: colors.primary }]}>
-              ₹{defaultPlan.unitPrice} <Text style={{ fontSize: 14 }}>/L</Text>
-            </Text>
-            <Text style={{ fontSize: 11, color: colors.textMuted }}>A2 Gir Cow Milk</Text>
-          </Card>
-        </View>
-
-        {/* Direct Dairy Support Card */}
-        <Card style={styles.dairySupportCard} variant="outlined">
-          <View style={styles.dairySupportHeader}>
-            <View>
-              <Text style={[styles.vendorLabel, { color: colors.textMuted }]}>Your Milk Vendor</Text>
-              <Text style={[styles.vendorName, { color: colors.textPrimary }]}>
-                Badhale Dairy & Farm
-              </Text>
-              <Text style={{ fontSize: 12, color: colors.textSecondary, marginTop: 2 }}>
-                Owner: Shailesh Badhale • Baner, Pune
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.dairyContactBtns}>
-            <Button
-              title="💬 WhatsApp Vendor"
-              variant="outline"
-              size="sm"
-              onPress={handleContactWhatsApp}
-              style={{ flex: 1 }}
-            />
-            <Button
-              title="📞 Call Vendor"
-              variant="outline"
-              size="sm"
-              onPress={handleCallDairy}
-              style={{ flex: 1 }}
-            />
-          </View>
-        </Card>
-      </ScrollView>
-
-      {/* Override Bottom Sheet Modal */}
-      <BottomSheetModal
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-        title={`Delivery for ${format(modalDate, 'dd MMMM yyyy')}`}
-        subtitle={`Default daily quota is ${formatLitres(defaultPlan.quantity)}`}
-      >
-        <View style={styles.modalContent}>
-          <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>
-            Select quantity for this date:
-          </Text>
-
-          <View style={styles.stepperCenter}>
-            <QuantityStepper
-              value={modalQty}
-              onChange={setModalQty}
-              step={0.5}
-              min={0}
-              max={10}
-              size="lg"
-            />
-          </View>
-
-          {/* Quick preset buttons */}
-          <View style={styles.presetButtonsRow}>
-            <TouchableOpacity
-              onPress={() => setModalQty(0)}
-              style={[
-                styles.presetBtn,
-                modalQty === 0 && { backgroundColor: '#FEE2E2', borderColor: '#EF4444' },
-              ]}
-            >
-              <Text style={[styles.presetText, modalQty === 0 && { color: '#EF4444', fontWeight: '700' }]}>
-                Skip (0L)
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setModalQty(defaultPlan.quantity)}
-              style={[
-                styles.presetBtn,
-                modalQty === defaultPlan.quantity && {
-                  backgroundColor: '#ECFDF5',
-                  borderColor: '#10B981',
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.presetText,
-                  modalQty === defaultPlan.quantity && { color: '#10B981', fontWeight: '700' },
-                ]}
-              >
-                Default ({defaultPlan.quantity}L)
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setModalQty(defaultPlan.quantity * 2)}
-              style={[
-                styles.presetBtn,
-                modalQty === defaultPlan.quantity * 2 && {
-                  backgroundColor: '#EFF6FF',
-                  borderColor: '#3B82F6',
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.presetText,
-                  modalQty === defaultPlan.quantity * 2 && { color: '#3B82F6', fontWeight: '700' },
-                ]}
-              >
-                Double ({defaultPlan.quantity * 2}L)
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <Button
-            title={`Confirm ${modalQty === 0 ? 'Skip' : `${modalQty} L`} for this date`}
-            variant="primary"
-            onPress={handleSaveModalOverride}
-            style={{ marginTop: 20 }}
-          />
-        </View>
-      </BottomSheetModal>
+      <DayQuantitySheet target={sheet} defaultQuantity={defaultQty} unit={unit} onClose={() => setSheet(null)} />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingBottom: 12,
+  container: { flex: 1 },
+  header: { paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  greeting: { fontSize: 13, fontWeight: '500' },
+  userName: { fontSize: 22, fontWeight: '800', letterSpacing: -0.3 },
+  avatar: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
+  avatarLetter: { color: '#FFFFFF', fontSize: 18, fontWeight: '800' },
+  scrollContent: { padding: 16, gap: 14 },
+  billBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  greeting: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  userName: {
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: -0.4,
-  },
-  profileAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarLetter: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 18,
-  },
-  scrollContent: {
-    padding: 16,
-    gap: 16,
-  },
-  billAlertBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 10,
     padding: 14,
     borderRadius: 14,
     borderWidth: 1,
+    backgroundColor: '#FEF3C7',
+    borderColor: '#F59E0B',
   },
-  heroCard: {
-    padding: 18,
-  },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  cardSubtitle: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  deliveryDetails: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginVertical: 16,
-    paddingVertical: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.06)',
-  },
-  detailMetric: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  metricLabel: {
-    fontSize: 11,
-    marginBottom: 2,
-  },
-  metricValue: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  divider: {
-    width: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-  },
-  statusBanner: {
-    padding: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  tomorrowCard: {
-    padding: 18,
-  },
-  cutoffRow: {
-    marginTop: 6,
-    marginBottom: 14,
-  },
-  cutoffNotice: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  quickActionPills: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  sectionLink: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  smallStatCard: {
-    flex: 1,
-    padding: 14,
-  },
-  smallStatLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  smallStatVal: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginVertical: 4,
-  },
-  dairySupportCard: {
-    padding: 16,
-    borderRadius: 16,
-  },
-  dairySupportHeader: {
-    marginBottom: 12,
-  },
-  vendorLabel: {
-    fontSize: 11,
-    textTransform: 'uppercase',
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  vendorName: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  dairyContactBtns: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  modalContent: {
-    paddingVertical: 12,
-  },
-  modalLabel: {
-    fontSize: 14,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  stepperCenter: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  presetButtonsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  presetBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-  },
-  presetText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
+  billTitle: { fontWeight: '700', color: '#92400E', fontSize: 13 },
+  billSub: { fontSize: 11, color: '#B45309', marginTop: 2 },
+  pausedCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14 },
+  pausedText: { flex: 1, fontSize: 13, fontWeight: '600' },
+  section: { padding: 16, gap: 12 },
+  rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  cardSub: { fontSize: 12, fontWeight: '500' },
+  cardTitle: { fontSize: 18, fontWeight: '700', marginTop: 2 },
+  muted: { fontSize: 12, lineHeight: 18, flex: 1 },
+  metrics: { flexDirection: 'row', alignItems: 'center' },
+  metric: { flex: 1 },
+  metricDivider: { width: StyleSheet.hairlineWidth, height: 32, marginHorizontal: 12 },
+  metricLabel: { fontSize: 12, fontWeight: '500' },
+  metricValue: { fontSize: 18, fontWeight: '700', marginTop: 2 },
+  statusStrip: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 10, borderRadius: 10 },
+  cutoffRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  actions: { flexDirection: 'row', gap: 8 },
+  sectionTitle: { fontSize: 16, fontWeight: '700' },
+  link: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  dayChip: { width: 64, alignItems: 'center', paddingVertical: 10, borderRadius: 14, borderWidth: 1 },
+  dayName: { fontSize: 11, fontWeight: '600' },
+  dayNum: { fontSize: 18, fontWeight: '800', marginVertical: 2 },
+  dayQty: { fontSize: 11, fontWeight: '700' },
+  extraDot: { width: 5, height: 5, borderRadius: 3, marginTop: 4 },
+  statsRow: { flexDirection: 'row', gap: 12 },
+  statCard: { flex: 1, padding: 14, gap: 2 },
+  statValue: { fontSize: 18, fontWeight: '800', marginTop: 4 },
+  statSub: { fontSize: 11 },
+  contactBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 12, borderWidth: 1 },
+  contactText: { fontSize: 13, fontWeight: '700' },
 });

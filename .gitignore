@@ -140,3 +140,11 @@ logs/
 *.temp
 *.swp
 *.swo
+# Build output
+backend/staticfiles/
+web/dist/
+backend/test_gawali.sqlite3
+.neon
+
+# Vercel CLI link
+.vercel/

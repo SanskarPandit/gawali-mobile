@@ -5,6 +5,7 @@ from django.http import HttpResponse
 from django.utils import timezone
 from django.db.models import Sum
 from datetime import datetime, date
+from decimal import Decimal, InvalidOperation
 from apps.core.permissions import IsCustomerUser, IsDairyUser
 from apps.customers.models import CustomerProfile
 from .models import Bill, BillItem
@@ -53,10 +54,14 @@ class DownloadBillPdfView(APIView):
 
         # Ensure user has access
         user = request.user
-        if user.role == 'customer' and bill.customer.user != user:
-            return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
-        elif user.role == 'dairy' and bill.dairy.user != user:
-            return Response({'detail': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+        allowed = (
+            (user.role == 'customer' and bill.customer.user_id == user.id)
+            or (user.role == 'dairy' and bill.dairy.user_id == user.id)
+            or user.role == 'admin'
+        )
+        if not allowed:
+            # Same answer as a missing bill, so ids cannot be probed.
+            return Response({'detail': 'Bill not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         pdf_bytes = generate_bill_pdf_bytes(bill)
         response = HttpResponse(pdf_bytes, content_type='application/pdf')
@@ -106,12 +111,15 @@ class DairyMarkBillPaidView(APIView):
 
         amount = request.data.get('amount')
         is_full = request.data.get('mark_full', False)
-        notes = request.data.get('notes', 'Cash / Direct UPI settlement')
+        notes = str(request.data.get('notes') or 'Cash / Direct UPI settlement')[:255]
 
-        if is_full or amount is None:
+        if is_full or amount in (None, ''):
             pay_amount = bill.due_amount
         else:
-            pay_amount = min(bill.due_amount, float(amount))
+            try:
+                pay_amount = min(bill.due_amount, Decimal(str(amount)).quantize(Decimal('0.01')))
+            except (InvalidOperation, ValueError):
+                return Response({'detail': 'Amount must be a number.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if pay_amount <= 0:
             return Response({'detail': 'Bill is already settled.'}, status=status.HTTP_400_BAD_REQUEST)

@@ -24,6 +24,15 @@ class Dairy(BaseModel):
     is_verified = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
     bank_upi_id = models.CharField(max_length=100, blank=True, help_text='VPA / UPI ID for direct customer payment')
+    hub_name = models.CharField(max_length=150, blank=True, help_text='Collection / chilling hub shown on purity passports')
+    slot_start = models.TimeField(default='05:30:00')
+    slot_end = models.TimeField(default='06:15:00')
+    bottle_deposit = models.DecimalField(max_digits=6, decimal_places=2, default=10, help_text='Refundable deposit per glass bottle')
+    pouch_eco_credit = models.DecimalField(max_digits=6, decimal_places=2, default=5, help_text='Wallet credit per 10 returned pouches')
+    credit_limit = models.DecimalField(max_digits=8, decimal_places=2, default=1500,
+                                       help_text='Most a household may owe before deliveries are held')
+    hold_on_dues = models.BooleanField(default=True, help_text='Hold next-day deliveries once dues pass the credit limit')
+    cutoff_reminders = models.BooleanField(default=True, help_text='Push a reminder an hour before cutoff')
 
     class Meta:
         verbose_name = 'Dairy'

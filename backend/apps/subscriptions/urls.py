@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
     SubscriptionDetailView,
+    DairyCustomerPlanView,
     CalendarMonthView,
     SetDeliveryOverrideView,
     RemoveDeliveryOverrideView,
@@ -15,6 +16,7 @@ router.register('orders', OrderViewSet, basename='extras_orders')
 
 urlpatterns = [
     path('plan/', SubscriptionDetailView.as_view(), name='subscription_detail'),
+    path('vendor/customers/<uuid:customer_id>/plan/', DairyCustomerPlanView.as_view(), name='dairy_customer_plan'),
     path('calendar/', CalendarMonthView.as_view(), name='calendar_month'),
     path('override/', SetDeliveryOverrideView.as_view(), name='set_override'),
     path('override/<uuid:pk>/', RemoveDeliveryOverrideView.as_view(), name='remove_override'),

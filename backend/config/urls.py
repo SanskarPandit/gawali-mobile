@@ -1,7 +1,10 @@
 from django.contrib import admin
-from django.urls import path, include
+from functools import lru_cache
+
+from django.http import Http404, HttpResponse
+from django.urls import include, path, re_path
 from django.conf import settings
-from django.conf.urls.static import static
+from apps.ops import views as ops_views
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularRedocView,
@@ -29,8 +32,31 @@ urlpatterns = [
     path('api/v1/reports/', include('apps.reports.urls')),
     path('api/v1/audit/', include('apps.audit.urls')),
     path('api/v1/notifications/', include('apps.notifications.urls')),
+
+    # API v2: Gawali experience, organised by role
+    path('api/v2/', include('apps.portal.urls')),
+    path('api/v2/', include('apps.ops.urls')),
+
+    # Uploads are stored in the database and streamed from here.
+    path('media/<path:name>', ops_views.media, name='media'),
+    path('healthz', ops_views.health, name='healthz'),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+@lru_cache(maxsize=1)
+def _spa_index() -> bytes:
+    index = settings.WEB_DIST / 'index.html'
+    if not index.exists():
+        raise Http404('Web app not built. Run `npm run build` in web/.')
+    return index.read_bytes()
+
+
+def spa(request, *args, **kwargs):
+    """Every non-API URL returns the React app, which routes on the client."""
+    resp = HttpResponse(_spa_index(), content_type='text/html; charset=utf-8')
+    resp['Cache-Control'] = 'no-cache'
+    return resp
+
+
+urlpatterns += [re_path(r'^(?!api/|admin/|media/|static/|healthz).*$', spa)]
+

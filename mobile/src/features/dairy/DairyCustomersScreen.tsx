@@ -1,214 +1,149 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-} from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import { ChevronRight, Search, UserPlus, Users } from 'lucide-react-native';
 import { useTheme } from '../../shared/theme/ThemeContext';
-import { Header, Card, Badge, Button } from '../../shared/ui';
-import { useAppSelector } from '../../app/store';
-import { formatCurrency, formatLitres } from '../../shared/utils/formatters';
+import { Badge, Button, Card, EmptyState, Header, LoadState, StaleBanner, usePullToRefresh } from '../../shared/ui';
+import { useGetDairyCustomersQuery, useGetRoutesQuery } from '../../shared/api/gawaliApi';
+import { toNumber } from '../../shared/api/types';
+import { formatCurrency, formatQuantity } from '../../shared/utils/formatters';
 
 export const DairyCustomersScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
-  const { routeCustomers } = useAppSelector((state) => state.delivery);
+  const { t } = useTranslation();
 
+  const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
-  const [filterPendingOnly, setFilterPendingOnly] = useState(false);
+  const [routeId, setRouteId] = useState<string | undefined>(undefined);
+  const [duesOnly, setDuesOnly] = useState(false);
 
-  const filtered = routeCustomers.filter((c) => {
-    if (filterPendingOnly && (c.balanceAmount || 0) <= 0) return false;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      return (
-        c.name.toLowerCase().includes(q) ||
-        c.wingFlat.toLowerCase().includes(q) ||
-        c.phone.includes(q)
-      );
-    }
-    return true;
-  });
+  // Debounce typing so the server is not queried on every keystroke.
+  useEffect(() => {
+    const id = setTimeout(() => setSearch(query.trim()), 350);
+    return () => clearTimeout(id);
+  }, [query]);
+
+  const customers = useGetDairyCustomersQuery({ search: search || undefined, route_id: routeId, has_dues: duesOnly });
+  const routes = useGetRoutesQuery();
+  const refreshControl = usePullToRefresh(customers.refetch);
+  const list = customers.data ?? [];
+
+  const Chip = ({ active, text, onPress }: { active: boolean; text: string; onPress: () => void }) => (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[styles.chip, { backgroundColor: active ? colors.primary : isDark ? colors.surface : 'rgba(0,0,0,0.05)' }]}
+      accessibilityState={{ selected: active }}
+    >
+      <Text style={[styles.chipText, { color: active ? '#FFFFFF' : colors.textSecondary }]}>{text}</Text>
+    </TouchableOpacity>
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Header
-        title="Customer Directory"
-        subtitle={`${routeCustomers.length} registered subscribers`}
+        title={t('dairy.customers_title', 'Households')}
+        subtitle={customers.data ? t('dairy.count', '{{count}} on your list', { count: list.length }) : undefined}
+        rightAction={
+          <Button title={t('dairy.add', 'Add')} icon={<UserPlus size={14} color="#FFFFFF" />} size="sm" onPress={() => navigation.navigate('DairyAddCustomer')} />
+        }
       />
 
-      {/* Search and Filters */}
-      <View style={[styles.searchBar, { borderBottomColor: colors.border }]}>
-        <View
-          style={[
-            styles.searchInputWrapper,
-            {
-              backgroundColor: isDark ? colors.surface : '#FFFFFF',
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <Text style={{ marginRight: 8 }}>🔍</Text>
+      <View style={styles.filters}>
+        <View style={[styles.search, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: colors.border }]}>
+          <Search size={16} color={colors.textMuted} />
           <TextInput
-            placeholder="Search by customer name, flat, phone..."
+            value={query}
+            onChangeText={setQuery}
+            placeholder={t('dairy.search_customers', 'Search name, phone, flat')}
             placeholderTextColor={colors.textMuted}
-            value={search}
-            onChangeText={setSearch}
             style={[styles.searchInput, { color: colors.textPrimary }]}
           />
         </View>
-
-        <TouchableOpacity
-          onPress={() => setFilterPendingOnly(!filterPendingOnly)}
-          style={[
-            styles.filterPill,
-            filterPendingOnly && { backgroundColor: '#FEE2E2', borderColor: '#EF4444' },
-          ]}
-        >
-          <Text
-            style={[
-              styles.filterPillText,
-              filterPendingOnly && { color: '#EF4444', fontWeight: '700' },
-            ]}
-          >
-            {filterPendingOnly ? 'Showing Overdue Only' : 'Filter Pending Balances'}
-          </Text>
-        </TouchableOpacity>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          <Chip active={duesOnly} text={t('dairy.with_dues', 'With dues')} onPress={() => setDuesOnly((v) => !v)} />
+          <Chip active={!routeId} text={t('dairy.all_routes', 'All routes')} onPress={() => setRouteId(undefined)} />
+          <Chip active={routeId === 'none'} text={t('dairy.no_route', 'No route')} onPress={() => setRouteId('none')} />
+          {(routes.data ?? []).map((r) => (
+            <Chip key={r.id} active={routeId === r.id} text={r.name} onPress={() => setRouteId(r.id)} />
+          ))}
+        </ScrollView>
       </View>
 
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + 90 },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {filtered.map((cust) => {
-          const hasBalance = cust.balanceAmount > 0;
-
-          return (
-            <Card
-              key={cust.id}
-              style={styles.customerCard}
-              onPress={() => navigation.navigate('DairyCustomerDetail', { customerId: cust.id })}
-            >
-              <View style={styles.cardHeader}>
+      <LoadState isLoading={customers.isLoading} error={customers.error} hasData={!!customers.data} onRetry={customers.refetch}>
+        <FlatList
+          data={list}
+          keyExtractor={(c) => c.id.toString()}
+          contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]}
+          refreshControl={refreshControl}
+          keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={<StaleBanner error={customers.error} />}
+          ListEmptyComponent={
+            <EmptyState
+              icon={<Users size={36} color={colors.textMuted} />}
+              title={search || routeId || duesOnly ? t('dairy.no_match', 'No households match') : t('dairy.no_customers', 'No households yet')}
+              body={search || routeId || duesOnly ? undefined : t('dairy.no_customers_body', 'Add your first household to start their daily deliveries.')}
+              action={
+                !(search || routeId || duesOnly) ? (
+                  <Button title={t('dairy.add_customer', 'Add a household')} onPress={() => navigation.navigate('DairyAddCustomer')} />
+                ) : undefined
+              }
+            />
+          }
+          renderItem={({ item: c }) => {
+            const due = toNumber(c.outstanding);
+            return (
+              <Card style={styles.row} onPress={() => navigation.navigate('DairyCustomerDetail', { customerId: c.id })}>
+                <View style={[styles.avatar, { backgroundColor: isDark ? colors.surface : '#ECFDF5' }]}>
+                  <Text style={[styles.avatarText, { color: colors.primary }]}>{c.full_name.charAt(0)}</Text>
+                </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.customerName, { color: colors.textPrimary }]}>
-                    {cust.name}
+                  <Text style={[styles.name, { color: colors.textPrimary }]} numberOfLines={1}>
+                    {c.full_name}
                   </Text>
-                  <Text style={[styles.customerAddress, { color: colors.textSecondary }]}>
-                    {cust.wingFlat} • {cust.address}
+                  <Text style={[styles.muted, { color: colors.textSecondary }]} numberOfLines={1}>
+                    {[c.flat_or_house_number, c.address].filter(Boolean).join(', ')}
                   </Text>
+                  <View style={styles.meta}>
+                    {c.plan ? (
+                      <Text style={[styles.muted, { color: colors.textMuted }]}>
+                        {c.plan.product_name} · {formatQuantity(c.plan.default_quantity, c.plan.unit)}
+                      </Text>
+                    ) : (
+                      <Badge label={t('dairy.no_plan', 'No plan')} variant="warning" size="sm" />
+                    )}
+                    {c.plan?.status === 'paused' && <Badge label={t('dairy.paused', 'Paused')} variant="neutral" size="sm" />}
+                  </View>
                 </View>
-                <Badge
-                  label={hasBalance ? 'Pending' : 'Settled'}
-                  variant={hasBalance ? 'warning' : 'success'}
-                />
-              </View>
-
-              <View style={styles.detailsRow}>
-                <View>
-                  <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Subscription</Text>
-                  <Text style={[styles.fieldVal, { color: colors.textPrimary }]}>
-                    {formatLitres(cust.quantity)} / day ({cust.productName})
-                  </Text>
+                <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                  {due > 0 && <Text style={styles.due}>{formatCurrency(due)}</Text>}
+                  {c.route_name ? <Text style={[styles.muted, { color: colors.textMuted }]}>{c.route_name}</Text> : null}
                 </View>
-
-                <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={[styles.fieldLabel, { color: colors.textMuted }]}>Balance</Text>
-                  <Text
-                    style={[
-                      styles.fieldVal,
-                      { color: hasBalance ? colors.error : colors.primary, fontWeight: '800' },
-                    ]}
-                  >
-                    {formatCurrency(cust.balanceAmount)}
-                  </Text>
-                </View>
-              </View>
-            </Card>
-          );
-        })}
-      </ScrollView>
+                <ChevronRight size={18} color={colors.textMuted} />
+              </Card>
+            );
+          }}
+        />
+      </LoadState>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  searchBar: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 8,
-  },
-  searchInputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 42,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-  },
-  filterPill: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignSelf: 'flex-start',
-  },
-  filterPillText: {
-    fontSize: 12,
-    color: '#64748B',
-    fontWeight: '500',
-  },
-  scrollContent: {
-    padding: 16,
-    gap: 12,
-  },
-  customerCard: {
-    padding: 16,
-    gap: 12,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  customerName: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  customerAddress: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  detailsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.06)',
-  },
-  fieldLabel: {
-    fontSize: 11,
-    marginBottom: 2,
-  },
-  fieldVal: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  container: { flex: 1 },
+  filters: { paddingHorizontal: 16, paddingTop: 12, gap: 8 },
+  search: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, height: 42 },
+  searchInput: { flex: 1, fontSize: 14, paddingVertical: 4 },
+  chips: { gap: 8 },
+  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
+  chipText: { fontSize: 12, fontWeight: '600' },
+  scroll: { padding: 16, gap: 10 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  avatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontSize: 16, fontWeight: '800' },
+  name: { fontSize: 15, fontWeight: '700' },
+  muted: { fontSize: 12, marginTop: 2 },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' },
+  due: { fontSize: 13, fontWeight: '800', color: '#DC2626' },
 });

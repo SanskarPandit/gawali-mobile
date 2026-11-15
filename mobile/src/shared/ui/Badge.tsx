@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
+import { View, Text, StyleSheet, ViewStyle } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 
 export type BadgeVariant = 'success' | 'warning' | 'error' | 'info' | 'neutral' | 'emerald';
@@ -17,7 +17,7 @@ export const Badge: React.FC<BadgeProps> = ({
   size = 'md',
   style,
 }) => {
-  const { colors, isDark } = useTheme();
+  const { isDark } = useTheme();
 
   const getColors = (): { bg: string; text: string; border?: string } => {
     switch (variant) {

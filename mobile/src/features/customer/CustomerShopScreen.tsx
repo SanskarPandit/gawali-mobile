@@ -1,423 +1,208 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-} from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import { addDays, format, parseISO } from 'date-fns';
+import { PackageOpen, ShoppingBag, X } from 'lucide-react-native';
 import { useTheme } from '../../shared/theme/ThemeContext';
-import { Header, Card, Badge, Button, QuantityStepper } from '../../shared/ui';
-import { useAppDispatch, useAppSelector } from '../../app/store';
+import { Badge, BottomSheetModal, Button, Card, EmptyState, Header, LoadState, QuantityStepper, StaleBanner, usePullToRefresh } from '../../shared/ui';
+import { errorMessage } from '../../shared/ui/QueryStates';
 import {
-  updateDefaultPlan,
-  addAddonToCart,
-  removeAddonFromCart,
-  clearCart,
-  ProductItem,
-} from '../../app/store/subscriptionSlice';
+  useCancelOrderMutation,
+  useCreateOrderMutation,
+  useGetCustomerDashboardQuery,
+  useGetMyOrdersQuery,
+  useGetShopProductsQuery,
+} from '../../shared/api/gawaliApi';
+import { Order, Product, toNumber } from '../../shared/api/types';
 import { formatCurrency } from '../../shared/utils/formatters';
 
-export const CustomerShopScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
+export const CustomerShopScreen: React.FC<{ navigation: any }> = () => {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
-  const dispatch = useAppDispatch();
-  const { defaultPlan, catalog, cartAddons } = useAppSelector((state) => state.subscription);
+  const { t } = useTranslation();
 
-  const [activeCategory, setActiveCategory] = useState<'all' | 'milk' | 'ghee' | 'paneer' | 'curd'>('all');
-
-  const dailyPlans = catalog.filter((p) => p.isDailySubscription);
-  const addonProducts = catalog.filter((p) => !p.isDailySubscription);
-
-  const filteredAddons = addonProducts.filter((p) => {
-    if (activeCategory === 'all') return true;
-    if (activeCategory === 'milk') return p.category.includes('milk');
-    if (activeCategory === 'ghee') return p.category === 'ghee';
-    if (activeCategory === 'paneer') return p.category === 'paneer';
-    if (activeCategory === 'curd') return p.category === 'curd';
-    return true;
+  const products = useGetShopProductsQuery();
+  const orders = useGetMyOrdersQuery({ upcoming: true });
+  const dashboard = useGetCustomerDashboardQuery();
+  const [createOrder, { isLoading: ordering }] = useCreateOrderMutation();
+  const [cancelOrder] = useCancelOrderMutation();
+  const refreshControl = usePullToRefresh(async () => {
+    await Promise.all([products.refetch(), orders.refetch()]);
   });
 
-  const cartTotalAmount = cartAddons.reduce(
-    (sum, item) => sum + item.product.price * item.quantity,
-    0
-  );
+  const [selected, setSelected] = useState<Product | null>(null);
+  const [qty, setQty] = useState(1);
+  const [date, setDate] = useState<string | null>(null);
 
-  const handleUpdateDailyMilk = (prod: ProductItem, qty: number) => {
-    dispatch(updateDefaultPlan({ productId: prod.id, quantity: qty }));
-    Alert.alert('Subscription Updated', `Your daily delivery is set to ${qty}L of ${prod.name}.`);
+  const extras = (products.data ?? []).filter((p) => p.kind === 'one_time');
+  const upcoming = (orders.data ?? []).filter((o) => o.status === 'pending');
+  const earliest = dashboard.data?.earliest_changeable_date;
+
+  const dates = useMemo(() => {
+    if (!earliest) return [];
+    return Array.from({ length: 7 }, (_, i) => format(addDays(parseISO(earliest), i), 'yyyy-MM-dd'));
+  }, [earliest]);
+
+  const openProduct = (p: Product) => {
+    setSelected(p);
+    setQty(1);
+    setDate(dates[0] ?? null);
   };
 
-  const handleAddToCart = (product: ProductItem) => {
-    dispatch(addAddonToCart({ product, quantity: 1 }));
+  const placeOrder = async () => {
+    if (!selected || !date) return;
+    try {
+      await createOrder({ product: selected.id, quantity: qty.toFixed(2), delivery_date: date }).unwrap();
+      setSelected(null);
+      Alert.alert(
+        t('shop.ordered', 'Order placed'),
+        t('shop.ordered_body', '{{name}} will come with your milk on {{date}}. It is added to your monthly bill.', {
+          name: selected.name,
+          date: format(parseISO(date), 'EEEE, d MMM'),
+        })
+      );
+    } catch (e) {
+      Alert.alert(t('shop.not_ordered', 'Order not placed'), errorMessage(e));
+    }
   };
 
-  const handleCheckoutCart = () => {
-    Alert.alert(
-      'Order Confirmed!',
-      `Added ${cartAddons.length} item(s) to tomorrow's delivery. Total ₹${cartTotalAmount} will be added to your month-end Gawali bill.`,
-      [
-        {
-          text: 'Great',
-          onPress: () => dispatch(clearCart()),
+  const confirmCancel = (o: Order) =>
+    Alert.alert(t('shop.cancel_title', 'Cancel this order?'), `${o.product_name} · ${format(parseISO(o.delivery_date), 'd MMM')}`, [
+      { text: t('common.no', 'No'), style: 'cancel' },
+      {
+        text: t('shop.cancel', 'Cancel order'),
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await cancelOrder(o.id).unwrap();
+          } catch (e) {
+            Alert.alert(t('shop.not_cancelled', 'Could not cancel'), errorMessage(e));
+          }
         },
-      ]
-    );
-  };
+      },
+    ]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Header
-        title="Store & Add-ons"
-        subtitle="Manage daily plan & order fresh dairy"
-      />
+      <Header title={t('shop.title', 'Dairy store')} subtitle={t('shop.subtitle', 'Extras delivered with your milk')} />
 
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + (cartAddons.length > 0 ? 140 : 90) },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Section 1: Daily Milk Plan Selection */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-            Your Daily Milk Plan
-          </Text>
-          <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-            Delivered fresh every morning before 7:00 AM
-          </Text>
+      <LoadState isLoading={products.isLoading} error={products.error} hasData={!!products.data} onRetry={products.refetch}>
+        <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]} refreshControl={refreshControl}>
+          <StaleBanner error={products.error} />
 
-          <View style={styles.dailyPlansList}>
-            {dailyPlans.map((plan) => {
-              const isSelected = defaultPlan.productId === plan.id;
+          {upcoming.length > 0 && (
+            <Card style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('shop.upcoming', 'Your upcoming extras')}</Text>
+              {upcoming.map((o) => (
+                <View key={o.id} style={[styles.orderRow, { borderColor: colors.border }]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.orderName, { color: colors.textPrimary }]}>
+                      {o.product_name} × {toNumber(o.quantity)}
+                    </Text>
+                    <Text style={[styles.muted, { color: colors.textSecondary }]}>
+                      {format(parseISO(o.delivery_date), 'EEE, d MMM')} · {formatCurrency(o.total_price)}
+                    </Text>
+                  </View>
+                  {earliest && o.delivery_date >= earliest ? (
+                    <TouchableOpacity onPress={() => confirmCancel(o)} hitSlop={8} accessibilityLabel={t('shop.cancel', 'Cancel order')}>
+                      <X size={18} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  ) : (
+                    <Badge label={t('shop.confirmed', 'Confirmed')} variant="emerald" size="sm" />
+                  )}
+                </View>
+              ))}
+            </Card>
+          )}
 
-              return (
-                <Card
-                  key={plan.id}
-                  style={[
-                    styles.dailyPlanCard,
-                    isSelected && { borderColor: colors.primary, borderWidth: 1.5 },
-                  ]}
+          {extras.length === 0 ? (
+            <EmptyState
+              icon={<PackageOpen size={36} color={colors.textMuted} />}
+              title={t('shop.empty', 'Nothing in the store yet')}
+              body={t('shop.empty_body', 'Your dairy has not added extra items like curd or paneer.')}
+            />
+          ) : (
+            <View style={styles.grid}>
+              {extras.map((p) => (
+                <TouchableOpacity
+                  key={p.id}
+                  activeOpacity={0.8}
+                  onPress={() => p.is_available && openProduct(p)}
+                  style={[styles.product, { backgroundColor: isDark ? colors.surface : '#FFFFFF', borderColor: colors.border, opacity: p.is_available ? 1 : 0.5 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${p.name}, ${formatCurrency(p.price_per_unit)} per ${p.unit}`}
                 >
-                  <View style={styles.planCardHeader}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.planName, { color: colors.textPrimary }]}>
-                        {plan.name}
-                      </Text>
-                      <Text style={[styles.planDesc, { color: colors.textMuted }]}>
-                        {plan.description}
-                      </Text>
-                    </View>
-                    <View style={styles.planPriceCol}>
-                      <Text style={[styles.planPrice, { color: colors.primary }]}>
-                        {formatCurrency(plan.price)}
-                      </Text>
-                      <Text style={{ fontSize: 11, color: colors.textMuted }}>per litre</Text>
-                    </View>
+                  <View style={[styles.productIcon, { backgroundColor: isDark ? colors.background : '#ECFDF5' }]}>
+                    <ShoppingBag size={22} color={colors.primary} />
                   </View>
-
-                  <View style={styles.planActionRow}>
-                    {isSelected ? (
-                      <View style={styles.selectedRow}>
-                        <Badge label="Active Plan" variant="success" />
-                        <View style={styles.dailyStepper}>
-                          <Text style={{ fontSize: 13, color: colors.textSecondary, marginRight: 8 }}>
-                            Daily Qty:
-                          </Text>
-                          <QuantityStepper
-                            value={defaultPlan.quantity}
-                            onChange={(val) => handleUpdateDailyMilk(plan, val)}
-                            step={0.5}
-                            min={0.5}
-                            max={10}
-                            size="sm"
-                          />
-                        </View>
-                      </View>
-                    ) : (
-                      <Button
-                        title="Switch to This Plan"
-                        variant="outline"
-                        size="sm"
-                        onPress={() => handleUpdateDailyMilk(plan, 1.0)}
-                      />
-                    )}
-                  </View>
-                </Card>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* Section 2: Farm-Fresh Addons */}
-        <View style={styles.section}>
-          <View style={styles.addonSectionHeader}>
-            <View>
-              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-                Fresh Dairy Add-ons
-              </Text>
-              <Text style={[styles.sectionSubtitle, { color: colors.textSecondary }]}>
-                Delivered with your morning milk • Pay at month end
-              </Text>
+                  <Text style={[styles.productName, { color: colors.textPrimary }]} numberOfLines={2}>
+                    {p.name}
+                  </Text>
+                  <Text style={[styles.muted, { color: colors.textMuted }]}>{p.unit}</Text>
+                  <Text style={[styles.price, { color: colors.primary }]}>{formatCurrency(p.price_per_unit)}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
+          )}
+        </ScrollView>
+      </LoadState>
+
+      <BottomSheetModal
+        visible={!!selected}
+        onClose={() => !ordering && setSelected(null)}
+        title={selected?.name ?? ''}
+        subtitle={selected ? `${formatCurrency(selected.price_per_unit)} / ${selected.unit}` : undefined}
+      >
+        <View style={{ gap: 14 }}>
+          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('shop.quantity', 'Quantity')}</Text>
+          <View style={{ alignItems: 'center' }}>
+            <QuantityStepper value={qty} onChange={setQty} step={1} min={1} max={20} unit="" size="lg" />
           </View>
-
-          {/* Categories */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catScroll}>
-            {(['all', 'ghee', 'paneer', 'curd'] as const).map((cat) => (
-              <TouchableOpacity
-                key={cat}
-                onPress={() => setActiveCategory(cat)}
-                style={[
-                  styles.catTab,
-                  activeCategory === cat && { backgroundColor: colors.primary },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.catTabText,
-                    { color: activeCategory === cat ? '#FFFFFF' : colors.textSecondary },
-                  ]}
-                >
-                  {cat === 'all'
-                    ? 'All Items'
-                    : cat === 'ghee'
-                    ? 'A2 Ghee'
-                    : cat === 'paneer'
-                    ? 'Fresh Paneer'
-                    : 'Curd / Dahi'}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {/* Addon Products List */}
-          <View style={styles.addonGrid}>
-            {filteredAddons.map((item) => {
-              const inCart = cartAddons.find((c) => c.product.id === item.id);
-
+          <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{t('shop.when', 'Deliver on')}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+            {dates.map((d) => {
+              const active = date === d;
               return (
-                <Card key={item.id} style={styles.addonCard}>
-                  <View style={styles.addonContent}>
-                    <Text style={[styles.addonName, { color: colors.textPrimary }]}>
-                      {item.name}
-                    </Text>
-                    <Text numberOfLines={2} style={[styles.addonDesc, { color: colors.textMuted }]}>
-                      {item.description}
-                    </Text>
-
-                    <View style={styles.addonBottom}>
-                      <View>
-                        <Text style={[styles.addonPrice, { color: colors.textPrimary }]}>
-                          {formatCurrency(item.price)}
-                        </Text>
-                        <Text style={{ fontSize: 11, color: colors.textMuted }}>per {item.unit}</Text>
-                      </View>
-
-                      {inCart ? (
-                        <View style={styles.cartStepperRow}>
-                          <TouchableOpacity
-                            onPress={() => dispatch(removeAddonFromCart(item.id))}
-                            style={[styles.miniBtn, { backgroundColor: isDark ? colors.surface : '#F1F5F9' }]}
-                          >
-                            <Text style={{ color: colors.textPrimary, fontWeight: '700' }}>−</Text>
-                          </TouchableOpacity>
-                          <Text style={{ fontWeight: '700', marginHorizontal: 8, color: colors.textPrimary }}>
-                            {inCart.quantity}
-                          </Text>
-                          <TouchableOpacity
-                            onPress={() => handleAddToCart(item)}
-                            style={[styles.miniBtn, { backgroundColor: colors.primary }]}
-                          >
-                            <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>+</Text>
-                          </TouchableOpacity>
-                        </View>
-                      ) : (
-                        <Button
-                          title="+ Add"
-                          variant="outline"
-                          size="sm"
-                          onPress={() => handleAddToCart(item)}
-                          style={{ minWidth: 70 }}
-                        />
-                      )}
-                    </View>
-                  </View>
-                </Card>
+                <TouchableOpacity
+                  key={d}
+                  onPress={() => setDate(d)}
+                  style={[styles.dateChip, { borderColor: active ? colors.primary : colors.border }, active && { backgroundColor: colors.primary }]}
+                >
+                  <Text style={{ fontSize: 11, color: active ? '#FFFFFF' : colors.textSecondary }}>{format(parseISO(d), 'EEE')}</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: active ? '#FFFFFF' : colors.textPrimary }}>{format(parseISO(d), 'd MMM')}</Text>
+                </TouchableOpacity>
               );
             })}
-          </View>
-        </View>
-      </ScrollView>
-
-      {/* Floating Cart Bar if items added */}
-      {cartAddons.length > 0 && (
-        <View
-          style={[
-            styles.floatingCart,
-            {
-              backgroundColor: colors.card,
-              bottom: insets.bottom + 65,
-              borderColor: colors.cardBorder,
-            },
-          ]}
-        >
-          <View>
-            <Text style={{ fontSize: 12, color: colors.textSecondary }}>
-              {cartAddons.reduce((s, i) => s + i.quantity, 0)} item(s) for tomorrow
-            </Text>
-            <Text style={{ fontSize: 18, fontWeight: '800', color: colors.textPrimary }}>
-              {formatCurrency(cartTotalAmount)}
-            </Text>
-          </View>
-
+          </ScrollView>
           <Button
-            title="Order with Delivery ›"
-            variant="primary"
-            size="md"
-            onPress={handleCheckoutCart}
+            title={t('shop.place', 'Order for {{amount}}', { amount: formatCurrency(qty * toNumber(selected?.price_per_unit)) })}
+            onPress={placeOrder}
+            loading={ordering}
+            disabled={!date}
           />
+          <Text style={[styles.muted, { color: colors.textMuted, textAlign: 'center' }]}>
+            {t('shop.billing_note', 'Pay with your monthly bill. No payment now.')}
+          </Text>
         </View>
-      )}
+      </BottomSheetModal>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    gap: 24,
-  },
-  section: {
-    gap: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
-  sectionSubtitle: {
-    fontSize: 13,
-  },
-  dailyPlansList: {
-    gap: 12,
-    marginTop: 4,
-  },
-  dailyPlanCard: {
-    padding: 16,
-    gap: 14,
-  },
-  planCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  planName: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  planDesc: {
-    fontSize: 12,
-    marginTop: 4,
-    lineHeight: 16,
-  },
-  planPriceCol: {
-    alignItems: 'flex-end',
-  },
-  planPrice: {
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  planActionRow: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.06)',
-    paddingTop: 12,
-  },
-  selectedRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  dailyStepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  addonSectionHeader: {
-    marginBottom: 4,
-  },
-  catScroll: {
-    gap: 8,
-    paddingVertical: 4,
-  },
-  catTab: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-  },
-  catTabText: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  addonGrid: {
-    gap: 12,
-    marginTop: 8,
-  },
-  addonCard: {
-    padding: 14,
-  },
-  addonContent: {
-    gap: 6,
-  },
-  addonName: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  addonDesc: {
-    fontSize: 12,
-    lineHeight: 16,
-  },
-  addonBottom: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  addonPrice: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  cartStepperRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  miniBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  floatingCart: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    padding: 14,
-    borderRadius: 18,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 8,
-  },
+  container: { flex: 1 },
+  scroll: { padding: 16, gap: 14 },
+  section: { padding: 16, gap: 8 },
+  sectionTitle: { fontSize: 16, fontWeight: '700' },
+  orderRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
+  orderName: { fontSize: 14, fontWeight: '700' },
+  muted: { fontSize: 12 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 12 },
+  product: { width: '48%', padding: 14, borderRadius: 16, borderWidth: 1, gap: 4 },
+  productIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
+  productName: { fontSize: 14, fontWeight: '700' },
+  price: { fontSize: 16, fontWeight: '800', marginTop: 4 },
+  fieldLabel: { fontSize: 13, fontWeight: '600' },
+  dateChip: { alignItems: 'center', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1 },
 });

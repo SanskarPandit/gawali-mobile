@@ -80,6 +80,10 @@ class Order(BaseModel):
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
     delivery_date = models.DateField(db_index=True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING, db_index=True)
+    is_express = models.BooleanField(default=False, help_text='15-minute emergency delivery from the nearest hub')
+    source = models.CharField(max_length=20, default='shop', help_text='shop, calendar, assistant or backup')
+    is_settled = models.BooleanField(default=False, help_text='Charged to wallet / autopay')
+    delivered_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = 'One-time Order'

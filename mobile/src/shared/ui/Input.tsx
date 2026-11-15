@@ -7,6 +7,7 @@ import {
   TextInputProps,
   TouchableOpacity,
 } from 'react-native';
+import { Eye, EyeOff } from 'lucide-react-native';
 import { useTheme } from '../theme/ThemeContext';
 
 interface InputProps extends TextInputProps {
@@ -75,9 +76,11 @@ export const Input: React.FC<InputProps> = ({
             style={styles.iconRight}
             onPress={() => setShowPassword(!showPassword)}
           >
-            <Text style={{ fontSize: 13, color: colors.primary, fontWeight: '600' }}>
-              {showPassword ? 'Hide' : 'Show'}
-            </Text>
+            {showPassword ? (
+              <EyeOff size={18} color={colors.textMuted} />
+            ) : (
+              <Eye size={18} color={colors.primary} />
+            )}
           </TouchableOpacity>
         ) : (
           rightIcon && <View style={styles.iconRight}>{rightIcon}</View>

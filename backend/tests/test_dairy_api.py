@@ -16,7 +16,8 @@ def test_today_deliveries_and_status_toggle(dairy_client, customer_subscription)
     # 1. Fetch today deliveries list
     list_res = dairy_client.get('/api/v1/deliveries/today/')
     assert list_res.status_code == status.HTTP_200_OK
-    results = list_res.data['results']
+    results = list_res.data['deliveries']
+    assert list_res.data['summary']['total'] == len(results)
     assert len(results) >= 1
     deliv_id = results[0]['id']
 

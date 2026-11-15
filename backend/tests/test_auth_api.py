@@ -1,5 +1,6 @@
 import pytest
 from rest_framework import status
+from apps.accounts.models import OTPCode
 
 @pytest.mark.django_db
 def test_register_customer(api_client):
@@ -50,7 +51,9 @@ def test_otp_flow(api_client):
     # 1. Send OTP
     send_res = api_client.post('/api/v1/auth/otp/send/', {'destination': '+919876500000'})
     assert send_res.status_code == status.HTTP_200_OK
-    dev_otp = send_res.data['dev_otp']
+    # The code must never be echoed back outside DEBUG; read it from the store instead.
+    assert 'dev_otp' not in send_res.data
+    dev_otp = OTPCode.objects.filter(destination='+919876500000').latest('created_at').code
     assert len(dev_otp) == 6
 
     # 2. Verify OTP

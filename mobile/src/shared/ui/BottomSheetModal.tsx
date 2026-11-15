@@ -7,9 +7,11 @@ import {
   TouchableWithoutFeedback,
   StyleSheet,
   ViewStyle,
-  Animated,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { X } from 'lucide-react-native';
 import { useTheme } from '../theme/ThemeContext';
 
 interface BottomSheetModalProps {
@@ -41,18 +43,23 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
     >
       <TouchableWithoutFeedback onPress={onClose}>
         <View style={styles.overlay}>
-          <TouchableWithoutFeedback>
-            <View
-              style={[
-                styles.sheet,
-                {
-                  backgroundColor: colors.card,
-                  paddingBottom: Math.max(insets.bottom, 20),
-                },
-                containerStyle,
-              ]}
-            >
-              <View style={styles.dragHandle} />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ width: '100%', justifyContent: 'flex-end' }}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
+          >
+            <TouchableWithoutFeedback>
+              <View
+                style={[
+                  styles.sheet,
+                  {
+                    backgroundColor: colors.card,
+                    paddingBottom: Math.max(insets.bottom, 20),
+                  },
+                  containerStyle,
+                ]}
+              >
+                <View style={styles.dragHandle} />
 
               {(title || subtitle) && (
                 <View style={styles.header}>
@@ -75,9 +82,7 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
                       { backgroundColor: isDark ? colors.surface : '#F1F5F9' },
                     ]}
                   >
-                    <Text style={[styles.closeText, { color: colors.textSecondary }]}>
-                      ✕
-                    </Text>
+                    <X size={16} color={colors.textSecondary} />
                   </TouchableOpacity>
                 </View>
               )}
@@ -85,9 +90,10 @@ export const BottomSheetModal: React.FC<BottomSheetModalProps> = ({
               <View style={styles.content}>{children}</View>
             </View>
           </TouchableWithoutFeedback>
-        </View>
-      </TouchableWithoutFeedback>
-    </Modal>
+        </KeyboardAvoidingView>
+      </View>
+    </TouchableWithoutFeedback>
+  </Modal>
   );
 };
 

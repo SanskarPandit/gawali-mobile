@@ -1,12 +1,6 @@
-from .base import *
+from .base import *  # noqa: F401,F403
 
-# Database
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / os.getenv('DB_NAME', 'gawali.sqlite3'),
-    }
-}
+# Local development. The database comes from DB_ENGINE / DB_* in .env (see .env.example).
 
 # Email Backend for development
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'

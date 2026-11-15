@@ -19,16 +19,132 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return data
 
 class RegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, min_length=6)
+    """Public self-signup. Always creates a customer: privileged roles are provisioned by admins only."""
+    password = serializers.CharField(write_only=True, min_length=8)
 
     class Meta:
         model = User
         fields = ['id', 'email', 'phone', 'full_name', 'role', 'password']
+        read_only_fields = ['id', 'role']
+
+    def validate_email(self, value):
+        value = value.lower().strip()
+        if User.all_objects.filter(email=value).exists():
+            raise serializers.ValidationError('An account with this email already exists.')
+        return value
 
     def create(self, validated_data):
         password = validated_data.pop('password')
-        user = User.objects.create_user(password=password, **validated_data)
-        return user
+        validated_data['role'] = User.Role.CUSTOMER
+        return User.objects.create_user(password=password, **validated_data)
+
+
+class ProfileUpdateSerializer(serializers.ModelSerializer):
+    """Fields a user may change on their own account. Role, email and verification flags are never self-editable."""
+
+    class Meta:
+        model = User
+        fields = ['full_name', 'phone', 'avatar_url']
+
+    def validate_full_name(self, value):
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Name cannot be empty.')
+        return value
+
+    def validate_phone(self, value):
+        if not value:
+            return None
+        value = value.strip()
+        if User.all_objects.filter(phone=value).exclude(pk=self.instance.pk).exists():
+            raise serializers.ValidationError('This phone number is already in use.')
+        return value
+
+
+class DeleteAccountSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True)
+
+    def validate_password(self, value):
+        if not self.context['request'].user.check_password(value):
+            raise serializers.ValidationError('Password is incorrect.')
+        return value
+
+
+class LogoutSerializer(serializers.Serializer):
+    refresh = serializers.CharField()
+
+
+class AdminAccountSerializer(serializers.ModelSerializer):
+    """Account directory row for the platform admin."""
+    dairy_id = serializers.SerializerMethodField()
+    dairy_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'phone', 'full_name', 'role', 'is_active', 'dairy_id', 'dairy_name', 'created_at']
+        read_only_fields = fields
+
+    def _dairy(self, obj):
+        if obj.role == User.Role.DAIRY:
+            return getattr(obj, 'dairy', None)
+        if obj.role == User.Role.DELIVERY_BOY:
+            profile = getattr(obj, 'delivery_profile', None)
+            return profile.dairy if profile else None
+        return None
+
+    def get_dairy_id(self, obj):
+        dairy = self._dairy(obj)
+        return str(dairy.id) if dairy else None
+
+    def get_dairy_name(self, obj):
+        dairy = self._dairy(obj)
+        return dairy.business_name if dairy else None
+
+
+class AdminAccountCreateSerializer(serializers.Serializer):
+    """Admin-only provisioning of dairy owners and gawalis (delivery staff)."""
+    ROLE_CHOICES = [User.Role.DAIRY, User.Role.DELIVERY_BOY]
+
+    role = serializers.ChoiceField(choices=ROLE_CHOICES)
+    full_name = serializers.CharField(max_length=255)
+    email = serializers.EmailField()
+    phone = serializers.CharField(max_length=20)
+    password = serializers.CharField(min_length=8, required=False, write_only=True)
+
+    # Dairy owner fields
+    business_name = serializers.CharField(max_length=255, required=False)
+    address = serializers.CharField(required=False, allow_blank=True)
+    city = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    pincode = serializers.CharField(max_length=10, required=False, allow_blank=True)
+
+    # Gawali fields
+    dairy_id = serializers.UUIDField(required=False)
+    vehicle_number = serializers.CharField(max_length=50, required=False, allow_blank=True)
+
+    def validate_email(self, value):
+        value = value.lower().strip()
+        if User.all_objects.filter(email=value).exists():
+            raise serializers.ValidationError('An account with this email already exists.')
+        return value
+
+    def validate_phone(self, value):
+        value = value.strip()
+        if User.all_objects.filter(phone=value).exists():
+            raise serializers.ValidationError('This phone number is already in use.')
+        return value
+
+    def validate(self, attrs):
+        from apps.dairies.models import Dairy
+
+        if attrs['role'] == User.Role.DAIRY:
+            if not attrs.get('business_name', '').strip():
+                raise serializers.ValidationError({'business_name': 'Dairy name is required.'})
+        else:
+            dairy = Dairy.objects.filter(id=attrs.get('dairy_id'), is_active=True).first() if attrs.get('dairy_id') else None
+            if not dairy:
+                raise serializers.ValidationError({'dairy_id': 'Select an active dairy for this gawali.'})
+            attrs['dairy'] = dairy
+        return attrs
 
 class LoginSerializer(serializers.Serializer):
     email = serializers.EmailField()

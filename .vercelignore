@@ -1,0 +1,17 @@
+# Never upload these to Vercel
+backend/venv/
+**/node_modules/
+mobile/
+backend/media/
+backend/staticfiles/
+backend/*.sqlite3
+backend/.coverage
+**/__pycache__/
+**/.pytest_cache/
+web/dist/
+.env
+.env.*
+**/.env
+**/.env.*
+!backend/.env.example
+.neon

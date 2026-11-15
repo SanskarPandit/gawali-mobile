@@ -1,209 +1,166 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-} from 'react-native';
+import React, { useState } from 'react';
+import { Alert, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import { format, parseISO } from 'date-fns';
+import { Share2 } from 'lucide-react-native';
 import { useTheme } from '../../shared/theme/ThemeContext';
-import { Header, Card, StatCard, Button } from '../../shared/ui';
-import { formatCurrency, formatLitres } from '../../shared/utils/formatters';
+import { Button, Card, Header, LoadState, StaleBanner, StatCard, usePullToRefresh } from '../../shared/ui';
+import { errorMessage } from '../../shared/ui/QueryStates';
+import { useGetReportsQuery } from '../../shared/api/gawaliApi';
+import { apiClient } from '../../shared/api/apiClient';
+import { useAppSelector } from '../../app/store';
+import type { DairyReport, ReportPreset } from '../../shared/api/types';
+import { formatCurrency, formatLitres, formatQuantity } from '../../shared/utils/formatters';
+
+const PRESETS: { key: ReportPreset; label: string; fallback: string }[] = [
+  { key: 'this_month', label: 'reports.this_month', fallback: 'This month' },
+  { key: 'last_month', label: 'reports.last_month', fallback: 'Last month' },
+  { key: 'last_7d', label: 'reports.last_7d', fallback: '7 days' },
+  { key: 'last_30d', label: 'reports.last_30d', fallback: '30 days' },
+];
+
+const toCsv = (r: DairyReport) =>
+  ['Date,Litres,Amount', ...r.daily_breakdown.map((d) => `${d.date},${d.quantity.toFixed(2)},${d.amount.toFixed(2)}`)].join('\n');
 
 export const DairyReportsScreen: React.FC<{ navigation: any }> = () => {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
+  const [preset, setPreset] = useState<ReportPreset>('this_month');
+  const report = useGetReportsQuery(preset);
+  const isDemo = useAppSelector((s) => s.auth.sessionMode === 'demo');
+  const refreshControl = usePullToRefresh(report.refetch);
+  const [exporting, setExporting] = useState(false);
+  const r = report.data;
 
-  const handleExportCSV = (type: string) => {
-    Alert.alert(
-      'Export Initiated',
-      `Generating ${type} CSV report. Backend endpoint: /api/reports/export/?format=csv`
-    );
+  const exportCsv = async () => {
+    if (!r) return;
+    setExporting(true);
+    try {
+      const csv = isDemo
+        ? toCsv(r)
+        : (await apiClient.get<string>('/reports/vendor/csv/', { params: { preset }, responseType: 'text' })).data;
+      await Share.share({ title: `Gawali report ${r.from} to ${r.to}`, message: csv });
+    } catch (e) {
+      Alert.alert(t('reports.export_failed', 'Could not export'), errorMessage(e));
+    } finally {
+      setExporting(false);
+    }
   };
 
-  const handleBroadcastWhatsApp = () => {
-    Alert.alert(
-      'Broadcast Invoices',
-      'This will send WhatsApp invoice links to all 50 registered customers with pending balances. Proceed?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Send Broadcast',
-          onPress: () =>
-            Alert.alert('Broadcast Sent', 'WhatsApp invoices queued and sent via Gawali notification service.'),
-        },
-      ]
-    );
-  };
+  const maxDay = Math.max(1, ...(r?.daily_breakdown ?? []).map((d) => d.quantity));
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <Header
-        title="Reports & Analytics"
-        subtitle="Volume, billing & collection summaries"
+        title={t('reports.title', 'Reports')}
+        subtitle={r ? `${format(parseISO(r.from), 'd MMM')} – ${format(parseISO(r.to), 'd MMM yyyy')}` : undefined}
+        rightAction={<Button title={t('reports.export', 'Export')} icon={<Share2 size={14} color={colors.primary} />} variant="outline" size="sm" onPress={exportCsv} loading={exporting} disabled={!r} />}
       />
+      <View style={styles.presets}>
+        {PRESETS.map((p) => {
+          const active = preset === p.key;
+          return (
+            <TouchableOpacity
+              key={p.key}
+              onPress={() => setPreset(p.key)}
+              style={[styles.chip, { backgroundColor: active ? colors.primary : isDark ? colors.surface : 'rgba(0,0,0,0.05)' }]}
+            >
+              <Text style={[styles.chipText, { color: active ? '#FFFFFF' : colors.textSecondary }]}>{t(p.label, p.fallback)}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
 
-      <ScrollView
-        contentContainerStyle={[
-          styles.scrollContent,
-          { paddingBottom: insets.bottom + 90 },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Month Summary Card */}
-        <Card style={styles.heroCard}>
-          <Text style={[styles.monthLabel, { color: colors.textSecondary }]}>
-            September 2026 Summary
-          </Text>
-          <Text style={[styles.totalRev, { color: colors.textPrimary }]}>
-            ₹1,24,680
-          </Text>
-          <Text style={[styles.revSub, { color: colors.textMuted }]}>
-            Gross value of milk and fresh dairy products delivered
-          </Text>
-
-          <View style={styles.statsStrip}>
-            <View style={styles.stripCol}>
-              <Text style={[styles.stripLabel, { color: colors.textMuted }]}>Delivered Volume</Text>
-              <Text style={[styles.stripVal, { color: colors.primary }]}>{formatLitres(1832)}</Text>
+      <LoadState isLoading={report.isFetching && !r} error={report.error} hasData={!!r} onRetry={report.refetch}>
+        {r && (
+          <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]} refreshControl={refreshControl}>
+            <StaleBanner error={report.error} />
+            <View style={styles.statRow}>
+              <StatCard title={t('reports.delivered', 'Milk delivered')} value={formatLitres(r.summary.delivered_litres)} style={{ marginRight: 8 }} />
+              <StatCard title={t('reports.revenue', 'Revenue earned')} value={formatCurrency(r.summary.revenue_earned)} style={{ marginLeft: 8 }} />
             </View>
-            <View style={styles.stripCol}>
-              <Text style={[styles.stripLabel, { color: colors.textMuted }]}>Collected</Text>
-              <Text style={[styles.stripVal, { color: '#10B981' }]}>₹98,200</Text>
+            <View style={styles.statRow}>
+              <StatCard title={t('reports.billed', 'Billed')} value={formatCurrency(r.summary.total_billed)} style={{ marginRight: 8 }} />
+              <StatCard
+                title={t('reports.collected', 'Collected')}
+                value={formatCurrency(r.summary.total_collected)}
+                subtitle={
+                  r.summary.total_billed > 0
+                    ? t('reports.collection_rate', '{{pct}}% of billed', { pct: Math.round((r.summary.total_collected / r.summary.total_billed) * 100) })
+                    : undefined
+                }
+                style={{ marginLeft: 8 }}
+              />
             </View>
-            <View style={styles.stripCol}>
-              <Text style={[styles.stripLabel, { color: colors.textMuted }]}>Pending</Text>
-              <Text style={[styles.stripVal, { color: '#EF4444' }]}>₹26,480</Text>
-            </View>
-          </View>
-        </Card>
 
-        {/* Breakdown by product */}
-        <Card style={styles.sectionCard}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-            Volume by Product Category
-          </Text>
+            {r.by_product.length > 0 && (
+              <Card style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('reports.by_product', 'By product')}</Text>
+                {r.by_product.map((p) => (
+                  <View key={p.name} style={[styles.row, { borderColor: colors.border }]}>
+                    <Text style={[styles.rowName, { color: colors.textPrimary }]}>{p.name}</Text>
+                    <Text style={[styles.muted, { color: colors.textSecondary }]}>{formatQuantity(p.quantity, p.unit)}</Text>
+                    <Text style={[styles.amount, { color: colors.textPrimary }]}>{formatCurrency(p.amount)}</Text>
+                  </View>
+                ))}
+              </Card>
+            )}
 
-          <View style={styles.breakdownRow}>
-            <Text style={{ color: colors.textSecondary }}>Pure Desi Cow Milk (A2)</Text>
-            <Text style={{ fontWeight: '700', color: colors.textPrimary }}>1,120 L (61%)</Text>
-          </View>
+            {r.top_customers.length > 0 && (
+              <Card style={styles.section}>
+                <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('reports.top', 'Top households')}</Text>
+                {r.top_customers.map((c, i) => (
+                  <View key={c.customer_id} style={[styles.row, { borderColor: colors.border }]}>
+                    <Text style={[styles.rank, { color: colors.primary }]}>{i + 1}</Text>
+                    <Text style={[styles.rowName, { color: colors.textPrimary }]}>{c.name}</Text>
+                    <Text style={[styles.amount, { color: colors.textPrimary }]}>{formatCurrency(c.amount)}</Text>
+                  </View>
+                ))}
+              </Card>
+            )}
 
-          <View style={styles.breakdownRow}>
-            <Text style={{ color: colors.textSecondary }}>Rich Buffalo Milk</Text>
-            <Text style={{ fontWeight: '700', color: colors.textPrimary }}>712 L (39%)</Text>
-          </View>
-
-          <View style={styles.breakdownRow}>
-            <Text style={{ color: colors.textSecondary }}>Gir Cow Ghee (Bilona)</Text>
-            <Text style={{ fontWeight: '700', color: colors.textPrimary }}>24 Jars (12 Kg)</Text>
-          </View>
-
-          <View style={styles.breakdownRow}>
-            <Text style={{ color: colors.textSecondary }}>Artisanal Malai Paneer</Text>
-            <Text style={{ fontWeight: '700', color: colors.textPrimary }}>38 Packs (9.5 Kg)</Text>
-          </View>
-        </Card>
-
-        {/* Data Export & Operations */}
-        <Card style={styles.sectionCard}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
-            Export Reports & Invoicing
-          </Text>
-
-          <Button
-            title="📥 Export Delivery Register (CSV)"
-            variant="outline"
-            onPress={() => handleExportCSV('Delivery Register')}
-            style={styles.actionBtn}
-          />
-
-          <Button
-            title="📥 Export Customer Ledger & Dues (CSV)"
-            variant="outline"
-            onPress={() => handleExportCSV('Customer Ledger')}
-            style={styles.actionBtn}
-          />
-
-          <Button
-            title="📢 Broadcast Invoices to All Overdue Customers"
-            variant="primary"
-            onPress={handleBroadcastWhatsApp}
-            style={styles.actionBtn}
-          />
-        </Card>
-      </ScrollView>
+            <Card style={styles.section}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>{t('reports.daily', 'Day by day')}</Text>
+              {r.daily_breakdown.length === 0 ? (
+                <Text style={[styles.muted, { color: colors.textMuted }]}>{t('reports.no_days', 'No deliveries in this period.')}</Text>
+              ) : (
+                r.daily_breakdown.map((d) => (
+                  <View key={d.date} style={styles.barRow}>
+                    <Text style={[styles.barLabel, { color: colors.textSecondary }]}>{format(parseISO(d.date), 'd MMM')}</Text>
+                    <View style={[styles.barTrack, { backgroundColor: isDark ? colors.surface : '#E2E8F0' }]}>
+                      <View style={[styles.barFill, { width: `${(d.quantity / maxDay) * 100}%`, backgroundColor: colors.primary }]} />
+                    </View>
+                    <Text style={[styles.barValue, { color: colors.textPrimary }]}>{formatLitres(d.quantity)}</Text>
+                  </View>
+                ))
+              )}
+            </Card>
+          </ScrollView>
+        )}
+      </LoadState>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    gap: 16,
-  },
-  heroCard: {
-    padding: 18,
-    alignItems: 'center',
-    gap: 6,
-  },
-  monthLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  totalRev: {
-    fontSize: 32,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-  },
-  revSub: {
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  statsStrip: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    paddingTop: 16,
-    marginTop: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.08)',
-  },
-  stripCol: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  stripLabel: {
-    fontSize: 11,
-    marginBottom: 4,
-  },
-  stripVal: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  sectionCard: {
-    padding: 16,
-    gap: 12,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  breakdownRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(0,0,0,0.05)',
-  },
-  actionBtn: {
-    marginTop: 4,
-  },
+  container: { flex: 1 },
+  presets: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingTop: 12 },
+  chip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16 },
+  chipText: { fontSize: 12, fontWeight: '600' },
+  scroll: { padding: 16, gap: 12 },
+  statRow: { flexDirection: 'row' },
+  section: { padding: 16, gap: 8 },
+  sectionTitle: { fontSize: 16, fontWeight: '700' },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth },
+  rowName: { flex: 1, fontSize: 14, fontWeight: '600' },
+  rank: { width: 18, fontWeight: '800' },
+  amount: { fontSize: 14, fontWeight: '700' },
+  muted: { fontSize: 12 },
+  barRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  barLabel: { width: 52, fontSize: 12 },
+  barTrack: { flex: 1, height: 10, borderRadius: 5, overflow: 'hidden' },
+  barFill: { height: 10, borderRadius: 5 },
+  barValue: { width: 56, fontSize: 12, fontWeight: '700', textAlign: 'right' },
 });

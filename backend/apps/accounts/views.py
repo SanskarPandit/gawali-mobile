@@ -3,19 +3,30 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
+from django.conf import settings
+from django.db import transaction
 from drf_spectacular.utils import extend_schema, OpenApiResponse
+from apps.core.permissions import IsAdminUser
 from .models import User
 from .serializers import (
     UserSerializer,
     RegisterSerializer,
+    ProfileUpdateSerializer,
+    DeleteAccountSerializer,
+    LogoutSerializer,
+    AdminAccountSerializer,
+    AdminAccountCreateSerializer,
     CustomTokenObtainPairSerializer,
     OTPSendSerializer,
     OTPVerifySerializer,
     ChangePasswordSerializer,
 )
+from . import services
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
+    throttle_scope = 'login'
 
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -56,12 +67,119 @@ class MeView(APIView):
             data['dairy_id'] = str(user.delivery_profile.dairy.id)
         return Response(data)
 
+    @extend_schema(request=ProfileUpdateSerializer, responses={200: UserSerializer})
     def patch(self, request):
-        user = request.user
-        serializer = UserSerializer(user, data=request.data, partial=True)
+        serializer = ProfileUpdateSerializer(request.user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(serializer.data)
+        return self.get(request)
+
+    @extend_schema(request=DeleteAccountSerializer, responses={204: OpenApiResponse(description='Account deleted')})
+    def delete(self, request):
+        serializer = DeleteAccountSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        if services.is_last_active_admin(request.user):
+            return Response(
+                {'detail': 'You are the only active admin. Add another admin before deleting this account.'},
+                status=status.HTTP_409_CONFLICT,
+            )
+        services.delete_account(request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class LogoutView(APIView):
+    """Revokes the refresh token so the session cannot be renewed."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    @extend_schema(request=LogoutSerializer, responses={205: OpenApiResponse(description='Logged out')})
+    def post(self, request):
+        serializer = LogoutSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            token = RefreshToken(serializer.validated_data['refresh'])
+        except TokenError:
+            return Response({'detail': 'Invalid or expired refresh token.'}, status=status.HTTP_400_BAD_REQUEST)
+        if str(token.get('user_id')) != str(request.user.pk):
+            return Response({'detail': 'Token does not belong to this user.'}, status=status.HTTP_403_FORBIDDEN)
+        token.blacklist()
+        return Response(status=status.HTTP_205_RESET_CONTENT)
+
+
+class AdminAccountListCreateView(generics.ListCreateAPIView):
+    """Admin directory of accounts, and provisioning of dairy owners and gawalis."""
+    permission_classes = [IsAdminUser]
+    serializer_class = AdminAccountSerializer
+
+    def get_queryset(self):
+        qs = User.objects.filter(is_deleted=False).select_related('dairy', 'delivery_profile__dairy')
+        role = self.request.query_params.get('role')
+        if role:
+            qs = qs.filter(role=role)
+        return qs
+
+    @extend_schema(request=AdminAccountCreateSerializer, responses={201: AdminAccountSerializer})
+    def create(self, request, *args, **kwargs):
+        from apps.dairies.models import Dairy
+        from apps.deliveries.models import DeliveryBoy
+
+        serializer = AdminAccountCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        password = data.get('password') or services.generate_temporary_password()
+
+        with transaction.atomic():
+            user = User.objects.create_user(
+                email=data['email'],
+                password=password,
+                full_name=data['full_name'].strip(),
+                phone=data['phone'],
+                role=data['role'],
+            )
+            if data['role'] == User.Role.DAIRY:
+                Dairy.objects.create(
+                    user=user,
+                    business_name=data['business_name'].strip(),
+                    phone=data['phone'],
+                    address=data.get('address', ''),
+                    city=data.get('city') or 'Pune',
+                    pincode=data.get('pincode', ''),
+                )
+            else:
+                DeliveryBoy.objects.create(
+                    user=user,
+                    dairy=data['dairy'],
+                    vehicle_number=data.get('vehicle_number', ''),
+                )
+
+        body = AdminAccountSerializer(user).data
+        # Returned once so the admin can hand it to the new account holder.
+        body['temporary_password'] = password
+        return Response(body, status=status.HTTP_201_CREATED)
+
+
+class AdminAccountStatusView(APIView):
+    """Admin can suspend or reactivate a dairy owner or gawali account."""
+    permission_classes = [IsAdminUser]
+
+    def patch(self, request, pk):
+        user = User.objects.filter(pk=pk, is_deleted=False).first()
+        if not user:
+            return Response({'detail': 'Account not found.'}, status=status.HTTP_404_NOT_FOUND)
+        if user.role not in (User.Role.DAIRY, User.Role.DELIVERY_BOY):
+            return Response(
+                {'detail': 'Only dairy and gawali accounts can be managed here.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        is_active = request.data.get('is_active')
+        if not isinstance(is_active, bool):
+            return Response({'detail': 'is_active must be true or false.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.is_active = is_active
+        user.save(update_fields=['is_active', 'updated_at'])
+        if not is_active:
+            services.revoke_all_tokens(user)
+        return Response(AdminAccountSerializer(user).data)
 
 class OTPSendView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -70,13 +188,15 @@ class OTPSendView(APIView):
         serializer = OTPSendSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         otp = serializer.create_otp()
-        # In development / testing, return code in response; in prod, integrate SMS provider
-        return Response({
+        body = {
             'success': True,
             'message': 'OTP sent successfully',
             'destination': otp.destination,
-            'dev_otp': otp.code # For easy testing
-        })
+        }
+        # Never expose the code outside local development: it would let anyone log in as anyone.
+        if settings.DEBUG:
+            body['dev_otp'] = otp.code
+        return Response(body)
 
 class OTPVerifyView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -116,6 +236,9 @@ class OTPVerifyView(APIView):
             else:
                 user.is_email_verified = True
                 user.save(update_fields=['is_email_verified'])
+
+        if not user.is_active or user.is_deleted:
+            return Response({'detail': 'This account has been deactivated.'}, status=status.HTTP_403_FORBIDDEN)
 
         refresh = RefreshToken.for_user(user)
         return Response({

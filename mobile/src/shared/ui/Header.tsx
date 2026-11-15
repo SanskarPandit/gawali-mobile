@@ -1,7 +1,9 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ChevronLeft } from 'lucide-react-native';
 import { useTheme } from '../theme/ThemeContext';
+import { DemoModeBar } from '../../app/session/DemoModeBar';
 
 interface HeaderProps {
   title: string;
@@ -43,7 +45,7 @@ export const Header: React.FC<HeaderProps> = ({
               { backgroundColor: isDark ? colors.surface : '#F1F5F9' },
             ]}
           >
-            <Text style={[styles.backArrow, { color: colors.textPrimary }]}>‹</Text>
+            <ChevronLeft size={22} color={colors.textPrimary} />
           </TouchableOpacity>
         ) : null}
 
@@ -68,6 +70,7 @@ export const Header: React.FC<HeaderProps> = ({
           <View style={styles.rightActionArea}>{rightAction}</View>
         ) : null}
       </View>
+      <DemoModeBar />
     </View>
   );
 };

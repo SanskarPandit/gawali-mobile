@@ -50,4 +50,5 @@ def test_vacation_pause_and_cancel(customer_client, customer_subscription):
 
     # 2. Delete vacation
     del_res = customer_client.delete(f'/api/v1/subscriptions/vacations/{vac_id}/')
-    assert del_res.status_code == status.HTTP_204_NO_CONTENT
+    assert del_res.status_code == status.HTTP_200_OK
+    assert del_res.data["message"] == "Vacation cancelled."

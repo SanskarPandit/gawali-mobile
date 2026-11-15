@@ -39,6 +39,13 @@ class CustomerProfile(BaseModel):
     route_stop_order = models.PositiveIntegerField(default=0, help_text="Sequential stop sequence for morning delivery")
     is_active = models.BooleanField(default=True)
 
+    # Doorstep intelligence
+    silent_delivery = models.BooleanField(default=True, help_text='Do not ring the doorbell')
+    use_gate_hook = models.BooleanField(default=False, help_text='Leave the order in the milk bag on the gate hook')
+    photo_proof = models.BooleanField(default=True, help_text='Partner uploads a drop-off photo')
+    society_name = models.CharField(max_length=200, blank=True)
+    society_gate_pass = models.BooleanField(default=False, help_text='Share an early-morning entry token with society security')
+
     class Meta:
         verbose_name = 'Customer Profile'
         verbose_name_plural = 'Customer Profiles'

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -10,14 +10,59 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { Sun, Moon, Milk, User, Store, Truck, ShieldCheck, CircleCheck } from 'lucide-react-native';
 import { useTheme } from '../../shared/theme/ThemeContext';
-import { Button, Input, Card } from '../../shared/ui';
+import { resetDemoServer } from '../../shared/api/demo/demoServer';
+import { Button, Input, BottomSheetModal } from '../../shared/ui';
 import { useAppDispatch, useAppSelector } from '../../app/store';
-import { quickDemoLogin, loginWithCredentials, setLanguage, UserRole } from '../../app/store/authSlice';
+import { clearAuthError, loginWithCredentials, setLanguage, startDemo, UserRole } from '../../app/store/authSlice';
 
 interface Props {
   navigation: any;
 }
+
+const GUEST_ROLES = [
+  {
+    role: 'customer',
+    Icon: User,
+    labelKey: 'auth.role_customer',
+    labelFallback: 'Customer',
+    person: 'Rahul Patil • Baner, Pune',
+    tint: '#10B981',
+    bg: '#ECFDF5',
+    badge: '#D1FAE5',
+  },
+  {
+    role: 'dairy',
+    Icon: Store,
+    labelKey: 'auth.role_dairy',
+    labelFallback: 'Dairy (Vendor)',
+    person: 'Badhale Dairy & Farm',
+    tint: '#3B82F6',
+    bg: '#EFF6FF',
+    badge: '#DBEAFE',
+  },
+  {
+    role: 'delivery_boy',
+    Icon: Truck,
+    labelKey: 'auth.role_delivery',
+    labelFallback: 'Delivery Partner',
+    person: 'Suresh Kadam',
+    tint: '#F59E0B',
+    bg: '#FFFBEB',
+    badge: '#FEF3C7',
+  },
+  {
+    role: 'admin',
+    Icon: ShieldCheck,
+    labelKey: 'auth.role_admin',
+    labelFallback: 'Platform Admin',
+    person: 'Mahesh Garade',
+    tint: '#A855F7',
+    bg: '#FAF5FF',
+    badge: '#F3E8FF',
+  },
+] as const satisfies ReadonlyArray<{ role: UserRole; [key: string]: unknown }>;
 
 export const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
@@ -26,15 +71,32 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
   const dispatch = useAppDispatch();
   const { isLoading, error, currentLanguage } = useAppSelector((state) => state.auth);
 
-  const [identifier, setIdentifier] = useState('shailesh.badhale@gawali.app');
-  const [password, setPassword] = useState('Gawali@12345');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [guestModalVisible, setGuestModalVisible] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
+
+  useEffect(() => {
+    dispatch(clearAuthError());
+  }, [dispatch]);
+
+  const canLogin = email.trim().length > 0 && password.length > 0;
 
   const handleLogin = () => {
-    dispatch(loginWithCredentials({ emailOrPhone: identifier, password }));
+    if (!canLogin) return;
+    dispatch(loginWithCredentials({ email, password }));
   };
 
-  const handleQuickDemo = (role: UserRole) => {
-    dispatch(quickDemoLogin(role));
+  const openGuestModal = () => {
+    setSelectedRole(null);
+    setGuestModalVisible(true);
+  };
+
+  const handleGuestContinue = () => {
+    if (!selectedRole) return;
+    setGuestModalVisible(false);
+    resetDemoServer(); // every demo starts from fresh sample data
+    dispatch(startDemo(selectedRole));
   };
 
   const handleLanguageChange = (lang: 'en' | 'hi' | 'mr') => {
@@ -88,117 +150,129 @@ export const LoginScreen: React.FC<Props> = ({ navigation }) => {
             onPress={toggleTheme}
             style={[styles.themeBtn, { backgroundColor: isDark ? colors.surface : '#F1F5F9' }]}
           >
-            <Text style={{ fontSize: 16 }}>{isDark ? '☀️' : '🌙'}</Text>
+            {isDark ? <Sun size={18} color="#F59E0B" /> : <Moon size={18} color={colors.textSecondary} />}
           </TouchableOpacity>
         </View>
 
         {/* Hero Branding */}
         <View style={styles.brandHero}>
           <View style={[styles.logoBadge, { backgroundColor: colors.primary }]}>
-            <Text style={styles.logoIcon}>🥛</Text>
+            <Milk size={34} color="#FFFFFF" strokeWidth={2.2} />
           </View>
-          <Text style={[styles.brandName, { color: colors.textPrimary }]}>Gawali</Text>
+          <Text style={[styles.brandName, { color: colors.textPrimary }]}>
+            {t('common.app_name', 'Gawali')}
+          </Text>
           <Text style={[styles.tagline, { color: colors.textSecondary }]}>
-            {t('tagline', 'Your milkman, in your pocket.')}
+            {t('common.tagline', 'Your milkman, in your pocket.')}
           </Text>
           <Text style={[styles.subTagline, { color: colors.primary }]}>
-            Skip a day • Add extra • Pay later
+            {t('common.subtagline', 'Skip a day • Add extra • Pay later')}
           </Text>
         </View>
-
-        {/* Quick Demo Logins Section */}
-        <Card style={styles.demoCard} variant="outlined">
-          <View style={styles.demoHeader}>
-            <Text style={[styles.demoTitle, { color: colors.textPrimary }]}>
-              ⚡ Instant 1-Tap Demo Logins
-            </Text>
-            <Text style={[styles.demoSubtitle, { color: colors.textMuted }]}>
-              Select any role to test full enterprise features immediately
-            </Text>
-          </View>
-
-          <View style={styles.demoGrid}>
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => handleQuickDemo('customer')}
-              style={[styles.demoButton, { backgroundColor: '#ECFDF5', borderColor: '#10B981' }]}
-            >
-              <Text style={styles.demoEmoji}>👤</Text>
-              <Text style={styles.demoRoleName}>Customer</Text>
-              <Text style={styles.demoPerson}>Rahul Patil</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => handleQuickDemo('dairy')}
-              style={[styles.demoButton, { backgroundColor: '#EFF6FF', borderColor: '#3B82F6' }]}
-            >
-              <Text style={styles.demoEmoji}>🥛</Text>
-              <Text style={styles.demoRoleName}>Dairy (Vendor)</Text>
-              <Text style={styles.demoPerson}>Badhale Dairy</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => handleQuickDemo('delivery_boy')}
-              style={[styles.demoButton, { backgroundColor: '#FFFBEB', borderColor: '#F59E0B' }]}
-            >
-              <Text style={styles.demoEmoji}>🚚</Text>
-              <Text style={styles.demoRoleName}>Delivery Boy</Text>
-              <Text style={styles.demoPerson}>Suresh Kadam</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => handleQuickDemo('admin')}
-              style={[styles.demoButton, { backgroundColor: '#FAF5FF', borderColor: '#A855F7' }]}
-            >
-              <Text style={styles.demoEmoji}>👑</Text>
-              <Text style={styles.demoRoleName}>Admin</Text>
-              <Text style={styles.demoPerson}>Mahesh Garade</Text>
-            </TouchableOpacity>
-          </View>
-        </Card>
 
         {/* Traditional Credentials Form */}
         <View style={styles.formContainer}>
           <Text style={[styles.formHeader, { color: colors.textSecondary }]}>
-            Or log in with your credentials
+            {t('auth.login_sub', 'Log in to your Gawali account.')}
           </Text>
 
           <Input
-            label="Email or Mobile Number"
-            placeholder="e.g. shailesh.badhale@gawali.app"
-            value={identifier}
-            onChangeText={setIdentifier}
+            label={t('auth.email', 'Email')}
+            placeholder="you@example.com"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
             autoCapitalize="none"
+            autoCorrect={false}
+            textContentType="emailAddress"
           />
 
           <Input
-            label="Password"
+            label={t('auth.password', 'Password')}
             placeholder="••••••••"
             value={password}
             onChangeText={setPassword}
             isPassword
+            textContentType="password"
+            onSubmitEditing={handleLogin}
           />
 
           {error && <Text style={[styles.errorBanner, { color: colors.error }]}>{error}</Text>}
 
           <Button
-            title="Log In to Gawali"
+            title={t('auth.login', 'Log In to Gawali')}
             onPress={handleLogin}
             loading={isLoading}
+            disabled={!canLogin}
             style={styles.loginBtn}
           />
 
           <View style={styles.footerRow}>
-            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>New customer or dairy?</Text>
+            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>
+              {t('auth.new_customer', 'New customer?')}
+            </Text>
             <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
-              <Text style={[styles.signupLink, { color: colors.primary }]}> Register Here</Text>
+              <Text style={[styles.signupLink, { color: colors.primary }]}>
+                {' '}{t('auth.register_here', 'Register Here')}
+              </Text>
             </TouchableOpacity>
           </View>
+
+          {/* Continue with guest mode */}
+          <TouchableOpacity onPress={openGuestModal} style={styles.guestLinkRow}>
+            <Text style={[styles.guestLink, { color: colors.primary }]}>
+              {t('auth.continue_guest_mode', 'Continue with guest mode')}
+            </Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Instant 1-Tap Demo Modal */}
+      <BottomSheetModal
+        visible={guestModalVisible}
+        onClose={() => setGuestModalVisible(false)}
+        title={t('auth.demo_title', 'Instant 1-Tap Demo Logins')}
+        subtitle={t('auth.demo_subtitle', 'Select any persona to test full features immediately')}
+      >
+        <View style={styles.modalGrid}>
+          {GUEST_ROLES.map(({ role, Icon, labelKey, labelFallback, person, tint, bg, badge }) => {
+            const selected = selectedRole === role;
+            return (
+              <TouchableOpacity
+                key={role}
+                activeOpacity={0.7}
+                onPress={() => setSelectedRole(role)}
+                style={[
+                  styles.modalDemoCard,
+                  selected
+                    ? { backgroundColor: bg, borderColor: tint }
+                    : { backgroundColor: colors.card, borderColor: colors.border },
+                ]}
+              >
+                <View style={[styles.modalIconBadge, { backgroundColor: badge }]}>
+                  <Icon size={22} color={tint} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.demoRoleName, { color: selected ? '#1E293B' : colors.textPrimary }]}>
+                    {t(labelKey, labelFallback)}
+                  </Text>
+                  <Text style={[styles.demoPerson, { color: selected ? '#64748B' : colors.textSecondary }]}>
+                    {person}
+                  </Text>
+                </View>
+                {selected && <CircleCheck size={22} color={tint} />}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        <Button
+          title={t('auth.continue', 'Continue')}
+          onPress={handleGuestContinue}
+          disabled={!selectedRole}
+          style={styles.guestContinueBtn}
+        />
+      </BottomSheetModal>
     </KeyboardAvoidingView>
   );
 };
@@ -342,5 +416,43 @@ const styles = StyleSheet.create({
   signupLink: {
     fontWeight: '700',
     fontSize: 13,
+  },
+  guestLinkRow: {
+    alignSelf: 'center',
+    marginTop: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  guestLink: {
+    fontSize: 14,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
+  guestContinueBtn: {
+    marginTop: 8,
+  },
+  modalGrid: {
+    paddingVertical: 8,
+    gap: 12,
+  },
+  modalDemoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    gap: 12,
+  },
+  modalIconBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  demoRoleDesc: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 3,
   },
 });

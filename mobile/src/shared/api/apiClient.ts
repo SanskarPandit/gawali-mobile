@@ -30,6 +30,12 @@ apiClient.interceptors.request.use(
   error => Promise.reject(error),
 );
 
+// Called when the session can no longer be renewed, so the app can return to the login screen.
+let onSessionExpired: (() => void) | null = null;
+export const setSessionExpiredHandler = (handler: () => void) => {
+  onSessionExpired = handler;
+};
+
 // Response Interceptor: Auto token refresh on 401
 let isRefreshing = false;
 let failedQueue: Array<{ resolve: (token: string) => void; reject: (err: any) => void }> = [];
@@ -67,7 +73,6 @@ apiClient.interceptors.response.use(
 
       const refreshToken = await tokenStorage.getRefreshToken();
       if (!refreshToken) {
-        await tokenStorage.clear();
         isRefreshing = false;
         return Promise.reject(error);
       }
@@ -88,6 +93,7 @@ apiClient.interceptors.response.use(
       } catch (refreshErr) {
         processQueue(refreshErr, null);
         await tokenStorage.clear();
+        onSessionExpired?.();
         return Promise.reject(refreshErr);
       } finally {
         isRefreshing = false;
